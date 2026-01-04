@@ -13,7 +13,7 @@ print("🚀 1. load_dotenv()...")
 load_dotenv()
 
 print("🚀 2. TOKEN...")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") or "8562030951:AAGwJdaYCKK-T0K9gxW5o_Xn7n7140llz2w"
 print(f"🚀 3. ТОКЕН: '{TELEGRAM_TOKEN[:10] if TELEGRAM_TOKEN else 'ПУСТО'}...'")
 print(f"🚀 4. ДЛИНА: {len(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else 0}")
 
