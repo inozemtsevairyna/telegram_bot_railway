@@ -1,10 +1,42 @@
-print("bot.py started")
+#!/usr/bin/env python3
 
+print("🚀 0. bot.py ЗАПУЩЕН")
+
+# === ОСНОВНЫЕ ИМПОРТЫ ПЕРВЫМИ ===
 import json
+import os
 import random
 import time
+from dotenv import load_dotenv
 
-# === TELEGRAM IMPORTS ===
+print("🚀 1. load_dotenv()...")
+load_dotenv()
+
+print("🚀 2. TOKEN...")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+print(f"🚀 3. ТОКЕН: '{TELEGRAM_TOKEN[:10] if TELEGRAM_TOKEN else 'ПУСТО'}...'")
+print(f"🚀 4. ДЛИНА: {len(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else 0}")
+
+# ПРОВЕРКА ТОКЕНА
+if not TELEGRAM_TOKEN:
+    raise RuntimeError("❌ TELEGRAM_TOKEN ПУСТ!")
+if len(TELEGRAM_TOKEN) < 30:
+    raise RuntimeError(f"❌ ТОКЕН НЕВЕРНЫЙ! Длина: {len(TELEGRAM_TOKEN)}")
+print("🚀 5. ТОКЕН OK")
+
+print("🚀 6. verbs.json...")
+# === LOAD VERBS ===
+try:
+    with open("verbs.json", "r", encoding="utf-8") as f:
+        VERBS = json.load(f)
+    print("🚀 7. verbs.json OK")
+except Exception as e:
+    print(f"❌ verbs.json ERROR: {e}")
+    VERBS = []
+    raise  # Останавливаем выполнение
+
+print("🚀 8. Telegram импорты...")
+# === TELEGRAM ИМПОРТЫ ===
 from telegram import (
     Update,
     InlineKeyboardMarkup,
@@ -18,24 +50,33 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Forbidden
 
-# === SETTINGS ===
-import os
-TELEGRAM_TOKEN = os.getenv("8562030951:AAHU7QtGPKgMcMMUjaf_f3dpqEZy_PdQ9iM")
+print("🚀 9. Готово к def main()!")
+
+# === TOKEN ===
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+print(f"🔍 ТОКЕН: '{TELEGRAM_TOKEN}'")
+print(f"🔍 ДЛИНА: {len(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else 0}")
+print(f"🔍 ПЕРВЫЕ 10 символов: {TELEGRAM_TOKEN[:10] if TELEGRAM_TOKEN else 'ПУСТО'}")
+
+if not TELEGRAM_TOKEN:
+    raise RuntimeError("TELEGRAM_TOKEN ПУСТ!")
+if len(TELEGRAM_TOKEN) < 30:
+    raise RuntimeError(f"ТОКЕН НЕВЕРНЫЙ! Длина: {len(TELEGRAM_TOKEN)}")
 
 # === LOAD VERBS ===
 with open("verbs.json", "r", encoding="utf-8") as f:
     VERBS = json.load(f)
 
-# === USER STATE ===
+# === USER STATE STORAGE ===
 user_state: dict[int, dict] = {}
 user_stats: dict[int, dict] = {}
 user_settings: dict[int, dict] = {}
 user_errors: dict[int, list] = {}
 
 # === INIT USER ===
-def init_user(user_id):
+def init_user(user_id: int):
     if user_id not in user_settings:
         user_settings[user_id] = {
             "daily_enabled": False,
@@ -47,6 +88,8 @@ def init_user(user_id):
             "correct": 0,
             "wrong": 0,
             "best": 0,
+            "streak": 0,
+            "last_training": 0,
         }
 
     if user_id not in user_errors:
@@ -54,7 +97,7 @@ def init_user(user_id):
 
     if user_id not in user_state:
         user_state[user_id] = {}
-        
+
 def get_user_level(user_id: int) -> int:
     return user_settings[user_id]["level"]
 
@@ -65,92 +108,84 @@ def get_random_verb(level: int):
     return random.choice(VERBS)
 
 def add_error(user_id: int, error: dict):
-    """
-    error = {"verb": verb_dict, "mode": "forms"/"translation"/"mix"}
-    """
+    """error = {"verb": verb_dict, "mode": "forms"/"translation"/"mix"}"""
     if not any(
         e["verb"]["inf"] == error["verb"]["inf"] and e["mode"] == error["mode"]
         for e in user_errors[user_id]
     ):
         user_errors[user_id].append(error)
-
-# === KEYBOARDS ===
+        # === KEYBOARDS ===
 def main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
     init_user(user_id)
 
     daily_enabled = user_settings[user_id]["daily_enabled"]
     daily_text = "🔔 Daily reminder: ON" if daily_enabled else "🔕 Daily reminder: OFF"
 
-    return InlineKeyboardMarkup(
+    return InlineKeyboardMarkup([
         [
-            [
-                InlineKeyboardButton("📘 Verb Forms", callback_data="menu_train_forms"),
-                InlineKeyboardButton("🌐 Translation", callback_data="menu_train_translation"),
-            ],
-            [
-                InlineKeyboardButton("🎲 Mix", callback_data="menu_mix"),
-                InlineKeyboardButton("⚡ Speed", callback_data="menu_speed"),
-            ],
-            [InlineKeyboardButton("🔁 Repeat Mistakes", callback_data="menu_repeat_errors")],
-            [
-                InlineKeyboardButton("📊 My Stats", callback_data="menu_stats"),
-                InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings"),
-            ],
-            [InlineKeyboardButton(daily_text, callback_data="toggle_daily_main")],
-            [InlineKeyboardButton("ℹ️ Help", callback_data="menu_help")],
-        ]
-    )
+            InlineKeyboardButton("📘 Verb Forms", callback_data="menu_train_forms"),
+            InlineKeyboardButton("🌐 Translation", callback_data="menu_train_translation"),
+        ],
+        [
+            InlineKeyboardButton("🎲 Mix", callback_data="menu_mix"),
+            InlineKeyboardButton("⚡ Speed", callback_data="menu_speed"),
+        ],
+        [InlineKeyboardButton("🔁 Repeat Mistakes", callback_data="menu_repeat_errors")],
+        [
+            InlineKeyboardButton("📊 My Stats", callback_data="menu_stats"),
+            InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings"),
+        ],
+        [InlineKeyboardButton(daily_text, callback_data="toggle_daily_main")],
+        [InlineKeyboardButton("ℹ️ Help", callback_data="menu_help")],
+    ])
+
 
 def forms_controls_keyboard(prefix: str = "forms") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next")],
-            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next")],
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
+    ])
+
 
 def translation_controls_keyboard(prefix: str = "translation") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next")],
-            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next")],
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
+    ])
+
 
 def speed_controls_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("⏹ Stop", callback_data="speed_stop")],
-            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⏹ Stop", callback_data="speed_stop")],
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
+    ])
+
 
 def settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
     daily = user_settings[user_id]["daily_enabled"]
     daily_text = "🔔 Daily reminder: ON" if daily else "🔕 Daily reminder: OFF"
 
-    return InlineKeyboardMarkup(
+    return InlineKeyboardMarkup([
         [
-            [
-                InlineKeyboardButton("1️⃣ Easy", callback_data="level_1"),
-                InlineKeyboardButton("2️⃣ Medium", callback_data="level_2"),
-                InlineKeyboardButton("3️⃣ Hard", callback_data="level_3"),
-            ],
-            [InlineKeyboardButton(daily_text, callback_data="toggle_daily")],
-            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
-        ]
-    )
+            InlineKeyboardButton("1️⃣ Easy", callback_data="level_1"),
+            InlineKeyboardButton("2️⃣ Medium", callback_data="level_2"),
+            InlineKeyboardButton("3️⃣ Hard", callback_data="level_3"),
+        ],
+        [InlineKeyboardButton(daily_text, callback_data="toggle_daily")],
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
+    ])
+
 
 def mix_controls_keyboard(prefix: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
+    return InlineKeyboardMarkup([
         [
-            [
-                InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next"),
-                InlineKeyboardButton("⏹ Stop", callback_data="speed_stop"),
-            ],
-            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
-        ]
-    )
+            InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next"),
+            InlineKeyboardButton("⏹ Stop", callback_data="speed_stop"),
+        ],
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
+    ])
+
+
 # === HELP TEXT ===
 EXPLANATION = (
     "*Past Simple vs Present Perfect*\n\n"
@@ -174,6 +209,7 @@ EXPLANATION = (
     "В Present Perfect — **3‑я форма** (gone, seen, done).  \n\n"
     "Всё обучение в приложении построено на том, чтобы ты уверенно различал и использовал эти формы."
 )
+
 
 # === TRAINING MODES START ===
 async def start_forms_training(user_id: int, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
@@ -258,8 +294,7 @@ async def start_mix_training(user_id: int, context: ContextTypes.DEFAULT_TYPE, c
         reply_markup=kb,
     )
 
-
-# === REPEAT ERRORS ===
+    # === REPEAT ERRORS ===
 async def start_repeat_errors(user_id: int, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     init_user(user_id)
     errors = user_errors[user_id]
@@ -299,7 +334,7 @@ async def start_repeat_errors(user_id: int, context: ContextTypes.DEFAULT_TYPE, 
         )
         kb = forms_controls_keyboard("repeat")
 
-    else:  # mix
+    else:  # mix (на будущее, если захочешь расширить)
         text = (
             "🔁 *Mistake review — Mix Mode*\n\n"
             f"Infinitive: *{verb['inf']}*\n"
@@ -315,21 +350,21 @@ async def start_repeat_errors(user_id: int, context: ContextTypes.DEFAULT_TYPE, 
         reply_markup=kb,
     )
 
-
-# === SPEED MODE ===
+ # === SPEED MODE START ===
 async def start_speed_mode(user_id: int, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     init_user(user_id)
+
     verb = get_random_verb(get_user_level(user_id))
-    end_time = time.time() + 60
+    end_time = time.time() + 60  # 60 seconds timer
 
     user_state[user_id] = {
-    "mode": "speed",
-    "verb": verb,
-    "correct": 0,
-    "total": 0,
-    "end_time": end_time,
-    "wrong_answers": []
-}
+        "mode": "speed",
+        "verb": verb,
+        "correct": 0,
+        "total": 0,
+        "end_time": end_time,
+        "wrong_answers": [],
+    }
 
     text = (
         "⚡ *Speed Mode — 60 seconds!*\n\n"
@@ -344,6 +379,7 @@ async def start_speed_mode(user_id: int, context: ContextTypes.DEFAULT_TYPE, cha
         parse_mode="Markdown",
         reply_markup=speed_controls_keyboard(),
     )
+
     # === ANSWER NORMALIZATION ===
 def normalize_answer(text: str):
     return [p.strip().lower() for p in text.replace(",", " ").split() if p.strip()]
@@ -357,9 +393,17 @@ async def process_translation_answer(
     context: ContextTypes.DEFAULT_TYPE,
     mode_override: str | None = None,
 ):
+    init_user(user_id)
     user_stats[user_id]["last_training"] = time.time()
 
-    state = user_state[user_id]
+    state = user_state.get(user_id, {})
+    if not state:
+        await update.message.reply_text(
+            "Choose a training mode 👇",
+            reply_markup=main_menu_keyboard(user_id),
+        )
+        return
+
     mode = mode_override or state.get("mode", "translation")
     verb = state["verb"]
 
@@ -371,7 +415,11 @@ async def process_translation_answer(
 
     user_ans = text.strip().lower()
 
-    correct = any(user_ans == exp or user_ans in exp or exp in user_ans for exp in expected)
+    # More accurate comparison
+    correct = any(
+        user_ans == exp or user_ans in exp or exp in user_ans
+        for exp in expected
+    )
 
     s = user_stats[user_id]
 
@@ -386,7 +434,7 @@ async def process_translation_answer(
         add_error(user_id, {"verb": verb, "mode": mode})
         reply = f"❌ Wrong!\n\nCorrect: *{verb['inf']}* — *{verb['ru']}*"
 
-    # NORMAL TRANSLATION MODE
+    # === NORMAL TRANSLATION MODE ===
     if mode == "translation":
         await update.message.reply_text(
             reply,
@@ -395,7 +443,7 @@ async def process_translation_answer(
         )
         return
 
-    # MIX MODE
+    # === MIX MODE ===
     if mode == "mix":
         await update.message.reply_text(
             reply,
@@ -404,46 +452,45 @@ async def process_translation_answer(
         )
         return
 
-    # REPEAT MODE
+    # === REPEAT MODE ===
     if mode == "repeat":
+        # Remove error if correct
+        if correct:
+            user_errors[user_id] = [
+                e for e in user_errors[user_id]
+                if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "translation")
+            ]
+        else:
+            # Move wrong error to end
+            wrong = user_errors[user_id].pop(0)
+            user_errors[user_id].append(wrong)
 
-       if correct:
-        # Удаляем ошибку, если ответ правильный
-        user_errors[user_id] = [
-            e for e in user_errors[user_id]
-            if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "translation")
-        ]
-    else:
-        # ❗ Если ответ неправильный — переносим ошибку в конец списка
-        wrong = user_errors[user_id].pop(0)
-        user_errors[user_id].append(wrong)
+        # No more errors
+        if not user_errors[user_id]:
+            await update.message.reply_text(
+                "🎉 Great job! You have no more mistakes left.",
+                reply_markup=main_menu_keyboard(user_id),
+                parse_mode="Markdown",
+            )
+            user_state[user_id] = {}
+            return
 
-    # Если ошибок больше нет — завершаем
-    if not user_errors[user_id]:
+        # Next error
+        next_error = user_errors[user_id][0]
+        next_verb = next_error["verb"]
+
+        user_state[user_id] = {
+            "mode": "repeat",
+            "verb": next_verb,
+            "repeat_mode": "translation",
+        }
+
         await update.message.reply_text(
-            "🎉 Great job! You have no more mistakes left.",
-            reply_markup=main_menu_keyboard(user_id),
+            reply + f"\n\nNext:\n*{next_verb['inf']}*",
             parse_mode="Markdown",
+            reply_markup=translation_controls_keyboard("repeat"),
         )
-        user_state[user_id] = {}
         return
-
-    # Следующая ошибка
-    next_error = user_errors[user_id][0]
-    next_verb = next_error["verb"]
-
-    user_state[user_id] = {
-        "mode": "repeat",
-        "verb": next_verb,
-        "repeat_mode": "translation"
-    }
-
-    await update.message.reply_text(
-        reply + f"\n\nNext:\n*{next_verb['inf']}*",
-        parse_mode="Markdown",
-        reply_markup=translation_controls_keyboard("repeat"),
-    )
-    return
 
 
 # === PROCESS FORMS ANSWER ===
@@ -454,9 +501,17 @@ async def process_forms_answer(
     context: ContextTypes.DEFAULT_TYPE,
     mode_override: str | None = None,
 ):
+    init_user(user_id)
     user_stats[user_id]["last_training"] = time.time()
 
-    state = user_state[user_id]
+    state = user_state.get(user_id, {})
+    if not state:
+        await update.message.reply_text(
+            "Choose a training mode 👇",
+            reply_markup=main_menu_keyboard(user_id),
+        )
+        return
+
     mode = mode_override or state.get("mode", "forms")
     verb = state["verb"]
 
@@ -487,7 +542,7 @@ async def process_forms_answer(
             f"{verb['inf']} — {verb['past']}, {verb['part']}"
         )
 
-    # NORMAL FORMS MODE
+    # === NORMAL FORMS MODE ===
     if mode == "forms":
         await update.message.reply_text(
             reply,
@@ -496,7 +551,7 @@ async def process_forms_answer(
         )
         return
 
-    # MIX MODE
+    # === MIX MODE ===
     if mode == "mix":
         await update.message.reply_text(
             reply,
@@ -505,7 +560,7 @@ async def process_forms_answer(
         )
         return
 
-    # REPEAT MODE
+    # === REPEAT MODE ===
     if mode == "repeat":
         if correct:
             user_errors[user_id] = [
@@ -524,7 +579,12 @@ async def process_forms_answer(
 
         next_error = user_errors[user_id][0]
         next_verb = next_error["verb"]
-        user_state[user_id] = {"mode": "repeat", "verb": next_verb, "repeat_mode": "forms"}
+
+        user_state[user_id] = {
+            "mode": "repeat",
+            "verb": next_verb,
+            "repeat_mode": "forms",
+        }
 
         await update.message.reply_text(
             reply + f"\n\nNext:\n*{next_verb['inf']}* — {next_verb['ru']}",
@@ -541,20 +601,29 @@ async def process_speed_answer(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
+    init_user(user_id)
     user_stats[user_id]["last_training"] = time.time()
-    state = user_state[user_id]
 
-    # === TIME IS UP (instant stop, no need to answer last question) ===
+    state = user_state.get(user_id)
+    if not state or state.get("mode") != "speed":
+        await update.message.reply_text(
+            "Choose a training mode 👇",
+            reply_markup=main_menu_keyboard(user_id),
+        )
+        return
+
+    # === TIME IS UP ===
     if time.time() >= state["end_time"]:
         wrong_list = state.get("wrong_answers", [])
 
-        if wrong_list:
-            wrong_text = "\n".join(
+        wrong_text = (
+            "\n".join(
                 f"• *{w['inf']}* — {w['past']}, {w['part']} ({w['ru']})"
                 for w in wrong_list
             )
-        else:
-            wrong_text = "No mistakes — great job!"
+            if wrong_list
+            else "No mistakes — great job!"
+        )
 
         result = (
             f"⏰ *Time is up!*\n\n"
@@ -571,7 +640,7 @@ async def process_speed_answer(
             reply_markup=main_menu_keyboard(user_id),
         )
         return
-    
+
     # === NORMAL PROCESSING ===
     verb = state["verb"]
     answer = normalize_answer(text)
@@ -609,12 +678,11 @@ async def process_speed_answer(
         state["correct"] += 1
         reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
     else:
-        # Save wrong answer
         state["wrong_answers"].append({
             "inf": verb["inf"],
             "past": verb["past"],
             "part": verb["part"],
-            "ru": verb["ru"]
+            "ru": verb["ru"],
         })
         reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
 
@@ -640,13 +708,14 @@ async def process_speed_answer(
         parse_mode="Markdown",
         reply_markup=speed_controls_keyboard(),
     )
-
-# === SAFE EDIT ===
+    # === SAFE EDIT (защита от ошибок Telegram) ===
 async def safe_edit(query, text, **kwargs):
     try:
-        if query.message.text != text:
+        # Если сообщение текстовое и текст отличается — редактируем
+        if query.message.text and query.message.text != text:
             await query.message.edit_text(text, **kwargs)
         else:
+            # Если текст тот же — обновляем только клавиатуру
             if "reply_markup" in kwargs:
                 await query.message.edit_reply_markup(kwargs["reply_markup"])
     except BadRequest as e:
@@ -655,12 +724,16 @@ async def safe_edit(query, text, **kwargs):
         else:
             raise
 
+
 # === CALLBACK HANDLER ===
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
+
     data = query.data
     user_id = query.from_user.id
-    chat_id = query.message.chat_id
+    chat_id = query.message.chat.id
 
     await query.answer()
     init_user(user_id)
@@ -685,7 +758,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Best streak: {s['best']}\n"
             f"Errors saved: {len(user_errors[user_id])}"
         )
-
         await safe_edit(
             query,
             text,
@@ -712,7 +784,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Daily reminder: {'ON' if daily else 'OFF'}\n\n"
             f"Choose an option:"
         )
-
         await safe_edit(
             query,
             text,
@@ -721,7 +792,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # === TOGGLE DAILY FROM SETTINGS ===
+    # === TOGGLE DAILY (settings) ===
     if data == "toggle_daily":
         user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
 
@@ -735,14 +806,15 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Choose an option:"
         )
 
-        await query.message.edit_text(
+        await safe_edit(
+            query,
             text,
             parse_mode="Markdown",
             reply_markup=settings_keyboard(user_id),
         )
         return
 
-    # === TOGGLE DAILY FROM MAIN MENU ===
+    # === TOGGLE DAILY (main menu) ===
     if data == "toggle_daily_main":
         user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
 
@@ -791,12 +863,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             user_state[user_id] = {}
 
-            await query.message.edit_text(
+            await safe_edit(
+                query,
                 result,
                 reply_markup=main_menu_keyboard(user_id),
             )
         else:
-            await query.message.edit_text(
+            await safe_edit(
+                query,
                 "Choose a training mode 👇",
                 reply_markup=main_menu_keyboard(user_id),
             )
@@ -822,28 +896,22 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "menu_repeat_errors":
         await start_repeat_errors(user_id, context, chat_id)
         return
-    # === COMMANDS ===
-from telegram.error import Forbidden  # добавь этот импорт в блок импортов
 
+
+# === COMMANDS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
+    user_id = update.effective_user.id
     init_user(user_id)
 
     intro_text = (
         "👋 *Welcome!*\n\n"
         "This bot helps you practise English irregular verbs.\n\n"
-        "*How to use the bot:*\n"
-        "1. Choose a training mode below.\n"
-        "2. Read the verb or translation.\n"
-        "3. Type your answer in the chat.\n"
-        "4. Press Next to continue.\n\n"
         "*Training modes:*\n"
         "- Forms — practise V1, V2, V3.\n"
         "- Translation — translate verbs.\n"
         "- Mix — both forms and translation.\n"
         "- Speed mode — answer as many as possible.\n"
         "- Repeat mistakes — verbs you answered incorrectly.\n\n"
-        "Use the *Help* button in the menu to see grammar explanations.\n\n"
         "Ready to practise? Choose a training mode! 👇"
     )
 
@@ -855,7 +923,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Forbidden:
         print(f"User {user_id} blocked the bot")
-        return
+
 
 async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -886,7 +954,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# === DAILY REMINDER ===
+# === DAILY REMINDER JOBS ===
 async def daily_reminder_job(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     user_id = job.chat_id
@@ -894,7 +962,7 @@ async def daily_reminder_job(context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(
         chat_id=user_id,
-        text="⏰ Daily practice time! Train 5 verbs 👌",
+        text="⏰ Daily practice time! Train irregular verbs 👌",
         reply_markup=main_menu_keyboard(user_id),
     )
 
@@ -930,10 +998,12 @@ async def daily_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_settings[user_id]["daily_enabled"] = True
 
+    # Remove old jobs
     old_jobs = context.job_queue.get_jobs_by_name(f"smart_daily_{user_id}")
     for j in old_jobs:
         j.schedule_removal()
 
+    # Add new job
     context.job_queue.run_repeating(
         smart_daily_check,
         interval=3600,
@@ -963,9 +1033,7 @@ async def daily_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "❌ Daily reminder is now OFF.",
         reply_markup=main_menu_keyboard(user_id),
     )
-
-
-# === TEXT HANDLER ===
+    # === TEXT HANDLER ===
 async def process_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     init_user(user_id)
@@ -973,6 +1041,7 @@ async def process_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
     state = user_state.get(user_id)
 
+    # No active mode
     if not state or "mode" not in state:
         await update.message.reply_text(
             "Ready to practise? Choose a training mode 👇",
@@ -1023,6 +1092,7 @@ async def process_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         "Ready to practise? Choose a training mode 👇",
         reply_markup=main_menu_keyboard(user_id),
     )
+
 
 # === MAIN ===
 def main():
