@@ -899,8 +899,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === COMMANDS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    init_user(user_id)
+    user_id = update.effective_user.id  # ✅ ДОБАВИТЬ ЭТУ СТРОКУ!
+    
+    await update.message.reply_text("🎯 Verbs Bot готов!")
 
     intro_text = (
         "👋 *Welcome!*\n\n"
@@ -918,11 +919,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             intro_text,
             parse_mode="Markdown",
-            reply_markup=main_menu_keyboard(user_id),
+            reply_markup=main_menu_keyboard(user_id),  # ✅ Теперь user_id определён
         )
     except Forbidden:
         print(f"User {user_id} blocked the bot")
-
 
 async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
