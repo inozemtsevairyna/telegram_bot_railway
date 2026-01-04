@@ -48,7 +48,6 @@ def main():
     
     # ТОЛЬКО 2 handlers!
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_text_answer))
     
     print("🚀 Bot starting...")
     app.run_polling(drop_pending_updates=True)
