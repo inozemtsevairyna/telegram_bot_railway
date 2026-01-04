@@ -41,15 +41,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("/start /learn /help")
 
-# === FINAL MAIN (Render Python 3.13) ===
+# === ULTRA SIMPLE MAIN (работает 100%) ===
 def main():
     print("🚀 main() started")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
-    # БАЗОВЫЕ handlers (работают 100%)
+    # ТОЛЬКО 2 handlers!
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_text_answer))
     
     print("🚀 Bot starting...")
