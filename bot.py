@@ -523,7 +523,7 @@ async def process_forms_answer(
 
     answer = normalize_answer(text)
 
-        expected_past = [p.strip().lower() for p in verb["past"].split("/")]
+    expected_past = [p.strip().lower() for p in verb["past"].split("/")]
     expected_part = [p.strip().lower() for p in verb["part"].split("/")]
 
     # ФИКС ДЛЯ MODALНЫХ ГЛАГОЛОВ (can)
