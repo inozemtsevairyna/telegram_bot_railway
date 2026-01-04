@@ -1094,7 +1094,7 @@ async def process_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # === MAIN ===
-# 1. ДОБАВИТЕ ЭТИ 4 функции (ДО main()):
+# === 4 РАБОЧИЕ ФУНКЦИИ ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎯 Verbs Bot! /learn")
 
@@ -1109,19 +1109,23 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📝 /learn")
 
-# 2. ЗАМЕНИТЕ main():
+# === MAIN ===
 def main():
     print("🚀 main() started")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
+    # ✅ ВСЕ 4 handlers работают!
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_callback))  # кнопки!
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CallbackQueryHandler(button))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("🚀 Bot starting... SINGLE INSTANCE ONLY!")
-    app.run_polling(drop_pending_updates=True, timeout=10)  # ✅ timeout!
+    print("🚀 Bot starting...")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    main()  # ← БЕЗ asyncio!
+    main()
+
 def main():  # ← СИНХРОННАЯ ФУНКЦИЯ!
     print("🚀 main() started")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
