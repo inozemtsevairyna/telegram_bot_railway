@@ -524,7 +524,7 @@ async def process_forms_answer(
     answer = normalize_answer(text)
 
 <<<<<<< HEAD
-        expected_past = [p.strip().lower() for p in verb["past"].split("/")]
+    expected_past = [p.strip().lower() for p in verb["past"].split("/")]
     expected_part = [p.strip().lower() for p in verb["part"].split("/")]
 
     # ФИКС ДЛЯ MODALНЫХ ГЛАГОЛОВ (can)
@@ -537,6 +537,7 @@ async def process_forms_answer(
             and answer[0] in expected_past
             and answer[1] in expected_part
         )
+
     s = user_stats[user_id]
 
     if correct:
