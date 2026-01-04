@@ -34,7 +34,7 @@
     { "inf": "burst", "past": "burst", "part": "burst", "ru": "лопаться, взрываться, разрываться" },
     { "inf": "bust", "past": "bust/busted", "part": "bust/busted", "ru": "разрушать, ломать, поймать с поличным, обанкротиться" },
     { "inf": "buy", "past": "bought", "part": "bought", "ru": "покупать" },
-    { "inf": "can", "past": "could", "part": "be able", "ru": "мочь, уметь" },
+    { "inf": "can", "past": "could", "part": "be able to", "ru": "мочь, уметь" },
     { "inf": "cast", "past": "cast", "part": "cast", "ru": "бросать, направлять, отливать, распределять роли" },
     { "inf": "catch", "past": "caught", "part": "caught", "ru": "ловить, поймать, успеть, понимать" },
     { "inf": "chide", "past": "chid/chided", "part": "chidden/chided", "ru": "укорять, бранить, упрекать" },
