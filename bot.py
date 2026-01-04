@@ -35,28 +35,23 @@ from telegram.error import BadRequest, Forbidden
 print("🚀 7. Готово!")
 
 # === HANDLERS ===
+# === РАБОЧИЕ ФУНКЦИИ ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎯 Verbs Bot! /learn")
+    await update.message.reply_text("🎯 Verbs Bot ЖИВ! 100%!")
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/start /learn /help")
-
-# === ULTRA SIMPLE MAIN (работает 100%) ===
-def main():
-    print("🚀 Render-compatible START")
+# === ASYNC MAIN ДЛЯ RENDER ===
+async def main():
+    print("🚀 ASYNC RENDER START")
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     
-    print("🚀 Bot LIVE - Render!")
-    app.run_polling(
-        drop_pending_updates=True,
-        stop_signals=None,  # ✅ Отключаем сигналы!
-        close_loop=False    # ✅ Не закрываем loop!
-    )
+    print("🚀 Bot LIVE!")
+    await app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
     
 # === TOKEN ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
