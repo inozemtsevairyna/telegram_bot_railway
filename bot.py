@@ -1,94 +1,43 @@
 #!/usr/bin/env python3
-
-print("🚀 0. bot.py ЗАПУЩЕН")
-
 import json
 import os
 import random
 import time
 
-print("🚀 1. TOKEN...")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") or "8562030951:AAGwJdaYCKK-T0K9gxW5o_Xn7n7140llz2w"
-print(f"🚀 2. ТОКЕН: '{TELEGRAM_TOKEN[:10]}...'")
-
-if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 30:
-    raise RuntimeError(f"❌ ТОКЕН ОШИБКА: {TELEGRAM_TOKEN}")
-print("🚀 3. ТОКЕН OK")
-
-print("🚀 4. verbs.json...")
-try:
-    with open("verbs.json", "r", encoding="utf-8") as f:
-        VERBS = json.load(f)
-    print("🚀 5. verbs.json OK")
-except Exception as e:
-    print(f"❌ verbs.json: {e}")
-    raise
-
-print("🚀 6. Импорты Telegram...")
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import (
+    Update, InlineKeyboardMarkup, InlineKeyboardButton
+)
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
     MessageHandler, ContextTypes, filters
 )
 from telegram.error import BadRequest, Forbidden
 
-print("🚀 7. Готово!")
+print("🚀 bot.py started")
 
-# === HANDLERS ===
-# === РАБОЧИЕ ФУНКЦИИ ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎯 Verbs Bot ЖИВ! 100%!")
-
-# === ASYNC MAIN ДЛЯ RENDER ===
-async def main():
-    print("🚀 ASYNC RENDER START")
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    
-    print("🚀 Bot LIVE!")
-    await app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
-    
 # === TOKEN ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-print(f"🔍 ТОКЕН: '{TELEGRAM_TOKEN}'")
-print(f"🔍 ДЛИНА: {len(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else 0}")
-print(f"🔍 ПЕРВЫЕ 10 символов: {TELEGRAM_TOKEN[:10] if TELEGRAM_TOKEN else 'ПУСТО'}")
-
-if not TELEGRAM_TOKEN:
-    raise RuntimeError("TELEGRAM_TOKEN ПУСТ!")
-if len(TELEGRAM_TOKEN) < 30:
-    raise RuntimeError(f"ТОКЕН НЕВЕРНЫЙ! Длина: {len(TELEGRAM_TOKEN)}")
+if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 30:
+    raise RuntimeError("❌ TELEGRAM_TOKEN invalid")
 
 # === LOAD VERBS ===
 with open("verbs.json", "r", encoding="utf-8") as f:
     VERBS = json.load(f)
 
-# === USER STATE STORAGE ===
-user_state: dict[int, dict] = {}
-user_stats: dict[int, dict] = {}
-user_settings: dict[int, dict] = {}
-user_errors: dict[int, list] = {}
+# === USER STORAGE ===
+user_state = {}
+user_stats = {}
+user_settings = {}
+user_errors = {}
 
-# === INIT USER ===
 def init_user(user_id: int):
     if user_id not in user_settings:
-        user_settings[user_id] = {
-            "daily_enabled": False,
-            "level": 1,
-        }
+        user_settings[user_id] = {"daily_enabled": False, "level": 1}
 
     if user_id not in user_stats:
         user_stats[user_id] = {
-            "correct": 0,
-            "wrong": 0,
-            "best": 0,
-            "streak": 0,
-            "last_training": 0,
+            "correct": 0, "wrong": 0, "best": 0,
+            "streak": 0, "last_training": 0
         }
 
     if user_id not in user_errors:
@@ -100,25 +49,23 @@ def init_user(user_id: int):
 def get_user_level(user_id: int) -> int:
     return user_settings[user_id]["level"]
 
-# === VERB SELECTION ===
 def get_random_verb(level: int):
     if level == 1 and len(VERBS) > 100:
         return random.choice(VERBS[:100])
     return random.choice(VERBS)
 
 def add_error(user_id: int, error: dict):
-    """error = {"verb": verb_dict, "mode": "forms"/"translation"/"mix"}"""
     if not any(
         e["verb"]["inf"] == error["verb"]["inf"] and e["mode"] == error["mode"]
         for e in user_errors[user_id]
     ):
         user_errors[user_id].append(error)
-        # === KEYBOARDS ===
-def main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    init_user(user_id)
 
-    daily_enabled = user_settings[user_id]["daily_enabled"]
-    daily_text = "🔔 Daily reminder: ON" if daily_enabled else "🔕 Daily reminder: OFF"
+ # === KEYBOARDS ===
+def main_menu_keyboard(user_id: int):
+    init_user(user_id)
+    daily = user_settings[user_id]["daily_enabled"]
+    daily_text = "🔔 Daily reminder: ON" if daily else "🔕 Daily reminder: OFF"
 
     return InlineKeyboardMarkup([
         [
@@ -139,28 +86,28 @@ def main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
     ])
 
 
-def forms_controls_keyboard(prefix: str = "forms") -> InlineKeyboardMarkup:
+def forms_controls_keyboard(prefix="forms"):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next")],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
     ])
 
 
-def translation_controls_keyboard(prefix: str = "translation") -> InlineKeyboardMarkup:
+def translation_controls_keyboard(prefix="translation"):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next")],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
     ])
 
 
-def speed_controls_keyboard() -> InlineKeyboardMarkup:
+def speed_controls_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⏹ Stop", callback_data="speed_stop")],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main_menu")],
     ])
 
 
-def settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
+def settings_keyboard(user_id: int):
     daily = user_settings[user_id]["daily_enabled"]
     daily_text = "🔔 Daily reminder: ON" if daily else "🔕 Daily reminder: OFF"
 
@@ -175,7 +122,7 @@ def settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
     ])
 
 
-def mix_controls_keyboard(prefix: str) -> InlineKeyboardMarkup:
+def mix_controls_keyboard(prefix):
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("▶️ Next", callback_data=f"{prefix}_next"),
@@ -188,25 +135,13 @@ def mix_controls_keyboard(prefix: str) -> InlineKeyboardMarkup:
 # === HELP TEXT ===
 EXPLANATION = (
     "*Past Simple vs Present Perfect*\n\n"
-    "*Past Simple* — действие завершено в прошлом, время указано или понятно из контекста.\n"
-    "Примеры:\n"
-    "- I visited London last year.\n"
-    "- She finished the project yesterday.\n\n"
-    "Сигнальные слова:\n"
-    "yesterday, last week, in 2010, two days ago, when I was a child\n\n"
-    "*Present Perfect* — действие связано с настоящим, важен результат или опыт.\n"
-    "Примеры:\n"
-    "- I have visited London many times.\n"
-    "- She has just finished the project.\n\n"
-    "Сигнальные слова:\n"
-    "already, just, yet, ever, never, recently, lately, so far\n\n"
-    "*Главное различие:*\n"
-    "Past Simple — важно, когда произошло действие.\n"
-    "Present Perfect — важно, что результат актуален сейчас.\n\n"
-    "*Помни:*  \n"
-    "В Past Simple используется **2‑я форма глагола** (went, saw, did).  \n"
-    "В Present Perfect — **3‑я форма** (gone, seen, done).  \n\n"
-    "Всё обучение в приложении построено на том, чтобы ты уверенно различал и использовал эти формы."
+    "*Past Simple* — действие завершено в прошлом.\n"
+    "Сигнальные слова: yesterday, last week, in 2010.\n\n"
+    "*Present Perfect* — результат важен сейчас.\n"
+    "Сигнальные слова: already, just, yet, ever.\n\n"
+    "Главное различие:\n"
+    "Past Simple — важно *когда* произошло.\n"
+    "Present Perfect — важен *результат сейчас*."
 )
 
 
@@ -293,7 +228,6 @@ async def start_mix_training(user_id: int, context: ContextTypes.DEFAULT_TYPE, c
         reply_markup=kb,
     )
 
-    # === REPEAT ERRORS ===
 async def start_repeat_errors(user_id: int, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     init_user(user_id)
     errors = user_errors[user_id]
@@ -324,7 +258,7 @@ async def start_repeat_errors(user_id: int, context: ContextTypes.DEFAULT_TYPE, 
         )
         kb = translation_controls_keyboard("repeat")
 
-    elif mode == "forms":
+    else:
         text = (
             "🔁 *Mistake review — Verb Forms*\n\n"
             f"Infinitive: *{verb['inf']}*\n"
@@ -333,23 +267,12 @@ async def start_repeat_errors(user_id: int, context: ContextTypes.DEFAULT_TYPE, 
         )
         kb = forms_controls_keyboard("repeat")
 
-    else:  # mix (на будущее, если захочешь расширить)
-        text = (
-            "🔁 *Mistake review — Mix Mode*\n\n"
-            f"Infinitive: *{verb['inf']}*\n"
-            f"Translation: *{verb['ru']}*\n\n"
-            "Answer the question:"
-        )
-        kb = mix_controls_keyboard("repeat")
-
     await context.bot.send_message(
         chat_id=chat_id,
         text=text,
         parse_mode="Markdown",
         reply_markup=kb,
     )
-
- # === SPEED MODE START ===
 async def start_speed_mode(user_id: int, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     init_user(user_id)
 
@@ -378,8 +301,8 @@ async def start_speed_mode(user_id: int, context: ContextTypes.DEFAULT_TYPE, cha
         parse_mode="Markdown",
         reply_markup=speed_controls_keyboard(),
     )
-
-    # === ANSWER NORMALIZATION ===
+    
+ # === ANSWER NORMALIZATION ===
 def normalize_answer(text: str):
     return [p.strip().lower() for p in text.replace(",", " ").split() if p.strip()]
 
@@ -414,7 +337,6 @@ async def process_translation_answer(
 
     user_ans = text.strip().lower()
 
-    # More accurate comparison
     correct = any(
         user_ans == exp or user_ans in exp or exp in user_ans
         for exp in expected
@@ -433,7 +355,7 @@ async def process_translation_answer(
         add_error(user_id, {"verb": verb, "mode": mode})
         reply = f"❌ Wrong!\n\nCorrect: *{verb['inf']}* — *{verb['ru']}*"
 
-    # === NORMAL TRANSLATION MODE ===
+    # NORMAL TRANSLATION MODE
     if mode == "translation":
         await update.message.reply_text(
             reply,
@@ -442,7 +364,7 @@ async def process_translation_answer(
         )
         return
 
-    # === MIX MODE ===
+    # MIX MODE
     if mode == "mix":
         await update.message.reply_text(
             reply,
@@ -451,20 +373,17 @@ async def process_translation_answer(
         )
         return
 
-    # === REPEAT MODE ===
+    # REPEAT MODE
     if mode == "repeat":
-        # Remove error if correct
         if correct:
             user_errors[user_id] = [
                 e for e in user_errors[user_id]
                 if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "translation")
             ]
         else:
-            # Move wrong error to end
             wrong = user_errors[user_id].pop(0)
             user_errors[user_id].append(wrong)
 
-        # No more errors
         if not user_errors[user_id]:
             await update.message.reply_text(
                 "🎉 Great job! You have no more mistakes left.",
@@ -474,7 +393,6 @@ async def process_translation_answer(
             user_state[user_id] = {}
             return
 
-        # Next error
         next_error = user_errors[user_id][0]
         next_verb = next_error["verb"]
 
@@ -518,11 +436,18 @@ async def process_forms_answer(
 
     expected_past = [p.strip().lower() for p in verb["past"].split("/")]
     expected_part = [p.strip().lower() for p in verb["part"].split("/")]
+
+    # Special case for "can"
     answer_str = " ".join(answer).strip()
     if verb["inf"] == "can":
         correct = any(x in answer_str for x in ["could be able", "be able to", "been able to", "be able"])
     else:
-        correct = len(answer) >= 2 and answer[0] in expected_past and answer[1] in expected_part
+        correct = (
+            len(answer) >= 2
+            and answer[0] in expected_past
+            and answer[1] in expected_part
+        )
+
     s = user_stats[user_id]
 
     if correct:
@@ -539,7 +464,7 @@ async def process_forms_answer(
             f"{verb['inf']} — {verb['past']}, {verb['part']}"
         )
 
-    # === NORMAL FORMS MODE ===
+    # NORMAL FORMS MODE
     if mode == "forms":
         await update.message.reply_text(
             reply,
@@ -548,7 +473,7 @@ async def process_forms_answer(
         )
         return
 
-    # === MIX MODE ===
+    # MIX MODE
     if mode == "mix":
         await update.message.reply_text(
             reply,
@@ -557,7 +482,7 @@ async def process_forms_answer(
         )
         return
 
-    # === REPEAT MODE ===
+    # REPEAT MODE
     if mode == "repeat":
         if correct:
             user_errors[user_id] = [
@@ -609,7 +534,7 @@ async def process_speed_answer(
         )
         return
 
-    # === TIME IS UP ===
+    # TIME IS UP
     if time.time() >= state["end_time"]:
         wrong_list = state.get("wrong_answers", [])
 
@@ -638,11 +563,10 @@ async def process_speed_answer(
         )
         return
 
-    # === NORMAL PROCESSING ===
+    # NORMAL PROCESSING
     verb = state["verb"]
     answer = normalize_answer(text)
 
-    # Empty input
     if not answer:
         remaining = max(0, int(state["end_time"] - time.time()))
         msg = (
@@ -705,14 +629,14 @@ async def process_speed_answer(
         parse_mode="Markdown",
         reply_markup=speed_controls_keyboard(),
     )
-    # === SAFE EDIT (защита от ошибок Telegram) ===
+
+
+# === SAFE EDIT (защита от ошибок Telegram) ===
 async def safe_edit(query, text, **kwargs):
     try:
-        # Если сообщение текстовое и текст отличается — редактируем
         if query.message.text and query.message.text != text:
             await query.message.edit_text(text, **kwargs)
         else:
-            # Если текст тот же — обновляем только клавиатуру
             if "reply_markup" in kwargs:
                 await query.message.edit_reply_markup(kwargs["reply_markup"])
     except BadRequest as e:
@@ -720,9 +644,7 @@ async def safe_edit(query, text, **kwargs):
             pass
         else:
             raise
-
-
-# === CALLBACK HANDLER ===
+  # === CALLBACK HANDLER ===
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -735,7 +657,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     init_user(user_id)
 
-    # === BACK TO MENU ===
+    # BACK TO MENU
     if data == "back_main_menu":
         user_state[user_id] = {}
         await safe_edit(
@@ -745,7 +667,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # === MAIN MENU ACTIONS ===
+    # MAIN MENU ACTIONS
     if data == "menu_stats":
         s = user_stats[user_id]
         text = (
@@ -789,7 +711,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # === TOGGLE DAILY (settings) ===
+    # TOGGLE DAILY (settings)
     if data == "toggle_daily":
         user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
 
@@ -811,7 +733,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # === TOGGLE DAILY (main menu) ===
+    # TOGGLE DAILY (main menu)
     if data == "toggle_daily_main":
         user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
 
@@ -822,7 +744,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # === DIFFICULTY LEVEL ===
+    # DIFFICULTY LEVEL
     if data.startswith("level_"):
         level = int(data.split("_")[1])
         user_settings[user_id]["level"] = level
@@ -834,7 +756,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # === NEXT BUTTONS ===
+    # NEXT BUTTONS
     if data.endswith("_next"):
         mode = data.split("_")[0]
 
@@ -848,7 +770,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await start_repeat_errors(user_id, context, chat_id)
         return
 
-    # === SPEED MODE STOP ===
+    # SPEED MODE STOP
     if data == "speed_stop":
         state = user_state.get(user_id, {})
 
@@ -873,7 +795,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # === MENU TRAININGS ===
+    # MENU TRAININGS
     if data == "menu_train_forms":
         await start_forms_training(user_id, context, chat_id)
         return
@@ -893,62 +815,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "menu_repeat_errors":
         await start_repeat_errors(user_id, context, chat_id)
         return
-
-
-# === COMMANDS ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id  # ✅ ДОБАВИТЬ ЭТУ СТРОКУ!
-    
-    await update.message.reply_text("🎯 Verbs Bot готов!")
-
-    intro_text = (
-        "👋 *Welcome!*\n\n"
-        "This bot helps you practise English irregular verbs.\n\n"
-        "*Training modes:*\n"
-        "- Forms — practise V1, V2, V3.\n"
-        "- Translation — translate verbs.\n"
-        "- Mix — both forms and translation.\n"
-        "- Speed mode — answer as many as possible.\n"
-        "- Repeat mistakes — verbs you answered incorrectly.\n\n"
-        "Ready to practise? Choose a training mode! 👇"
-    )
-
-    try:
-        await update.message.reply_text(
-            intro_text,
-            parse_mode="Markdown",
-            reply_markup=main_menu_keyboard(user_id),  # ✅ Теперь user_id определён
-        )
-    except Forbidden:
-        print(f"User {user_id} blocked the bot")
-
-async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    init_user(user.id)
-
-    s = user_stats[user.id]
-
-    text = (
-        f"📊 *Your Stats:*\n\n"
-        f"Correct: {s['correct']}\n"
-        f"Wrong: {s['wrong']}\n"
-        f"Best streak: {s['best']}\n"
-        f"Errors saved: {len(user_errors[user.id])}"
-    )
-
-    await update.message.reply_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(user.id),
-    )
-
-
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        EXPLANATION,
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(update.effective_user.id),
-    )
 
 
 # === DAILY REMINDER JOBS ===
@@ -982,6 +848,7 @@ async def smart_daily_check(context: ContextTypes.DEFAULT_TYPE):
         user_stats[user_id]["last_training"] = now
 
 
+# === DAILY COMMANDS ===
 async def daily_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     init_user(user_id)
@@ -1030,7 +897,9 @@ async def daily_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "❌ Daily reminder is now OFF.",
         reply_markup=main_menu_keyboard(user_id),
     )
-    # === TEXT HANDLER ===
+
+
+# === TEXT HANDLER ===
 async def process_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     init_user(user_id)
@@ -1038,7 +907,6 @@ async def process_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
     state = user_state.get(user_id)
 
-    # No active mode
     if not state or "mode" not in state:
         await update.message.reply_text(
             "Ready to practise? Choose a training mode 👇",
@@ -1091,76 +959,82 @@ async def process_text_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
-# === MAIN ===
-# === 4 РАБОЧИЕ ФУНКЦИИ ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎯 Verbs Bot! /learn")
+# === COMMANDS ===
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    init_user(user_id)
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/start /learn /help")
+    intro_text = (
+        "👋 *Welcome!*\n\n"
+        "This bot helps you practise English irregular verbs.\n\n"
+        "*Training modes:*\n"
+        "- Forms — practise V1, V2, V3.\n"
+        "- Translation — translate verbs.\n"
+        "- Mix — both forms and translation.\n"
+        "- Speed mode — answer as many as possible.\n"
+        "- Repeat mistakes — verbs you answered incorrectly.\n\n"
+        "Ready to practise? Choose a training mode! 👇"
+    )
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("🔘 OK!")
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📝 /learn")
-
-# === MAIN ===
-def main():
-    print("🚀 main() started")
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    
-    # ✅ ВСЕ 4 handlers работают!
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CallbackQueryHandler(button))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("🚀 Bot starting...")
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
-
-def main():  # ← СИНХРОННАЯ ФУНКЦИЯ!
-    print("🚀 main() started")
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    
-    # Все handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("stats", stats_cmd))
-    app.add_handler(CommandHandler("daily_on", daily_on))
-    app.add_handler(CommandHandler("daily_off", daily_off))
-    app.add_handler(CallbackQueryHandler(callback_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_text_answer))
-    
-    print("🚀 Bot starting...")
-    app.run_polling(drop_pending_updates=True)  # ← БЕЗ await!
-
-if __name__ == "__main__":
-    main()  # ← БЕЗ asyncio.run!
+    await update.message.reply_text(
+        intro_text,
+        parse_mode="Markdown",
+        reply_markup=main_menu_keyboard(user_id),
+    )
 
 
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        EXPLANATION,
+        parse_mode="Markdown",
+        reply_markup=main_menu_keyboard(update.effective_user.id),
+    )
 
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    init_user(user.id)
+
+    s = user_stats[user.id]
+
+    text = (
+        f"📊 *Your Stats:*\n\n"
+        f"Correct: {s['correct']}\n"
+        f"Wrong: {s['wrong']}\n"
+        f"Best streak: {s['best']}\n"
+        f"Errors saved: {len(user_errors[user.id])}"
+    )
+
+    await update.message.reply_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=main_menu_keyboard(user.id),
+    )
+
+
+# === FINAL ASYNC MAIN FOR RENDER ===
 async def main():
-    print("🚀 main() started")
+    print("🚀 ASYNC RENDER START")
+
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    
-    # ВСЕ handlers ОДИН РАЗ
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("stats", stats_cmd))
+
+    # COMMANDS
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("help", cmd_help))
+    app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("daily_on", daily_on))
     app.add_handler(CommandHandler("daily_off", daily_off))
+
+    # CALLBACKS
     app.add_handler(CallbackQueryHandler(callback_handler))
+
+    # TEXT ANSWERS
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_text_answer))
-    
-    print("🚀 Bot starting...")
+
+    print("🚀 Bot LIVE!")
     await app.run_polling(drop_pending_updates=True)
+
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+    asyncio.run(main())        
