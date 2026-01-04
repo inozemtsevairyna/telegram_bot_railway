@@ -2,19 +2,18 @@
 
 print("🚀 0. bot.py ЗАПУЩЕН")
 
-# === ОСНОВНЫЕ ИМПОРТЫ ПЕРВЫМИ ===
 import json
 import os
 import random
 import time
-from dotenv import load_dotenv
 
-print("🚀 1. load_dotenv()...")
-load_dotenv()
-
-print("🚀 2. TOKEN...")
+print("🚀 1. TOKEN...")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") or "8562030951:AAGwJdaYCKK-T0K9gxW5o_Xn7n7140llz2w"
-print(f"🚀 3. ТОКЕН: '{TELEGRAM_TOKEN[:10] if TELEGRAM_TOKEN else 'ПУСТО'}...'")
+print(f"🚀 2. ТОКЕН: '{TELEGRAM_TOKEN[:10]}...'")
+
+if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 30:
+    raise RuntimeError(f"❌ ТОКЕН ОШИБКА: {TELEGRAM_TOKEN}")
+print("🚀 3. ТОКЕН OK")
 print(f"🚀 4. ДЛИНА: {len(TELEGRAM_TOKEN) if TELEGRAM_TOKEN else 0}")
 
 # ПРОВЕРКА ТОКЕНА
