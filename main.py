@@ -17,12 +17,22 @@ print("🚀 bot.py started")
 
 # === TOKEN ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 30:
-    raise RuntimeError("❌ TELEGRAM_TOKEN invalid")
+if not TELEGRAM_TOKEN:
+    raise RuntimeError("❌ TELEGRAM_TOKEN is not set (env TELEGRAM_TOKEN)")
+
+TELEGRAM_TOKEN = TELEGRAM_TOKEN.strip()
+if len(TELEGRAM_TOKEN) < 30:
+    raise RuntimeError(f"❌ TELEGRAM_TOKEN looks too short: {len(TELEGRAM_TOKEN)} chars")
 
 # === LOAD VERBS ===
-with open("verbs.json", "r", encoding="utf-8") as f:
-    VERBS = json.load(f)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VERBS_PATH = os.path.join(BASE_DIR, "verbs.json")
+
+try:
+    with open(VERBS_PATH, "r", encoding="utf-8") as f:
+        VERBS = json.load(f)
+except FileNotFoundError:
+    raise RuntimeError(f"❌ verbs.json not found at {VERBS_PATH}")
 
 # === USER STORAGE ===
 user_state = {}
@@ -301,7 +311,7 @@ async def start_speed_mode(user_id: int, context: ContextTypes.DEFAULT_TYPE, cha
         parse_mode="Markdown",
         reply_markup=speed_controls_keyboard(),
     )
-    
+
  # === ANSWER NORMALIZATION ===
 def normalize_answer(text: str):
     return [p.strip().lower() for p in text.replace(",", " ").split() if p.strip()]
@@ -634,189 +644,215 @@ async def process_speed_answer(
 # === SAFE EDIT (защита от ошибок Telegram) ===
 async def safe_edit(query, text, **kwargs):
     try:
-        if query.message.text and query.message.text != text:
-            await query.message.edit_text(text, **kwargs)
+        msg = query.message
+        if not msg:
+            return
+
+        # Если текст отличается — меняем текст (и при необходимости разметку)
+        if msg.text != text:
+            await msg.edit_text(text, **kwargs)
         else:
+            # Если текст тот же, но передали новую клавиатуру — обновляем только её
             if "reply_markup" in kwargs:
-                await query.message.edit_reply_markup(kwargs["reply_markup"])
+                await msg.edit_reply_markup(kwargs["reply_markup"])
     except BadRequest as e:
         if "Message is not modified" in str(e):
+            # Просто игнорируем это частое не-критичное исключение
             pass
         else:
             raise
-            
+        
 # === CALLBACK HANDLER ===
+# === CALLBACK HANDLER (исправленный) ===
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if not query:
-        return
+    try:
+        query = update.callback_query
+        if not query:
+            return
 
-    data = query.data
-    user_id = query.from_user.id
-    chat_id = query.message.chat.id
+        data = query.data
+        user_id = query.from_user.id
+        chat_id = query.message.chat.id if query.message else user_id
 
-    await query.answer()
-    init_user(user_id)
+        await query.answer()
+        init_user(user_id)
 
-    # BACK TO MENU
-    if data == "back_main_menu":
-        user_state[user_id] = {}
-        await safe_edit(
-            query,
-            "Choose a training mode 👇",
-            reply_markup=main_menu_keyboard(user_id),
-        )
-        return
-
-    # MAIN MENU ACTIONS
-    if data == "menu_stats":
-        s = user_stats[user_id]
-        text = (
-            f"📊 *Your Stats:*\n\n"
-            f"Correct: {s['correct']}\n"
-            f"Wrong: {s['wrong']}\n"
-            f"Best streak: {s['best']}\n"
-            f"Errors saved: {len(user_errors[user_id])}"
-        )
-        await safe_edit(
-            query,
-            text,
-            parse_mode="Markdown",
-            reply_markup=main_menu_keyboard(user_id),
-        )
-        return
-
-    if data == "menu_help":
-        await safe_edit(
-            query,
-            EXPLANATION,
-            parse_mode="Markdown",
-            reply_markup=main_menu_keyboard(user_id),
-        )
-        return
-
-    if data == "menu_settings":
-        level = get_user_level(user_id)
-        daily = user_settings[user_id]["daily_enabled"]
-        text = (
-            f"⚙️ *Settings*\n\n"
-            f"Difficulty level: {level}\n"
-            f"Daily reminder: {'ON' if daily else 'OFF'}\n\n"
-            f"Choose an option:"
-        )
-        await safe_edit(
-            query,
-            text,
-            parse_mode="Markdown",
-            reply_markup=settings_keyboard(user_id),
-        )
-        return
-
-    # TOGGLE DAILY (settings)
-    if data == "toggle_daily":
-        user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
-
-        level = get_user_level(user_id)
-        daily = user_settings[user_id]["daily_enabled"]
-
-        text = (
-            f"⚙️ *Settings*\n\n"
-            f"Difficulty level: {level}\n"
-            f"Daily reminder: {'ON' if daily else 'OFF'}\n\n"
-            f"Choose an option:"
-        )
-
-        await safe_edit(
-            query,
-            text,
-            parse_mode="Markdown",
-            reply_markup=settings_keyboard(user_id),
-        )
-        return
-
-    # TOGGLE DAILY (main menu)
-    if data == "toggle_daily_main":
-        user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
-
-        await safe_edit(
-            query,
-            "Choose a training mode 👇",
-            reply_markup=main_menu_keyboard(user_id),
-        )
-        return
-
-    # DIFFICULTY LEVEL
-    if data.startswith("level_"):
-        level = int(data.split("_")[1])
-        user_settings[user_id]["level"] = level
-
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="Choose a training mode👇",
-            reply_markup=main_menu_keyboard(user_id),
-        )
-        return
-
-    # NEXT BUTTONS
-    if data.endswith("_next"):
-        mode = data.split("_")[0]
-
-        if mode == "translation":
-            await start_translation_training(user_id, context, chat_id)
-        elif mode == "forms":
-            await start_forms_training(user_id, context, chat_id)
-        elif mode == "mix":
-            await start_mix_training(user_id, context, chat_id)
-        elif mode == "repeat":
-            await start_repeat_errors(user_id, context, chat_id)
-        return
-
-    # SPEED MODE STOP
-    if data == "speed_stop":
-        state = user_state.get(user_id, {})
-
-        if state.get("mode") == "speed":
-            result = (
-                f"⏹ Speed Mode stopped.\n\n"
-                f"Correct answers: {state.get('correct', 0)}\n"
-                f"Total questions: {state.get('total', 0)}"
-            )
+        # BACK TO MENU
+        if data == "back_main_menu":
             user_state[user_id] = {}
-
-            await safe_edit(
-                query,
-                result,
-                reply_markup=main_menu_keyboard(user_id),
-            )
-        else:
             await safe_edit(
                 query,
                 "Choose a training mode 👇",
                 reply_markup=main_menu_keyboard(user_id),
             )
-        return
+            return
 
-    # MENU TRAININGS
-    if data == "menu_train_forms":
-        await start_forms_training(user_id, context, chat_id)
-        return
+        # MAIN MENU ACTIONS
+        if data == "menu_stats":
+            s = user_stats[user_id]
+            text = (
+                f"📊 *Your Stats:*\n\n"
+                f"Correct: {s['correct']}\n"
+                f"Wrong: {s['wrong']}\n"
+                f"Best streak: {s['best']}\n"
+                f"Errors saved: {len(user_errors[user_id])}"
+            )
+            await safe_edit(
+                query,
+                text,
+                parse_mode="Markdown",
+                reply_markup=main_menu_keyboard(user_id),
+            )
+            return
 
-    if data == "menu_train_translation":
-        await start_translation_training(user_id, context, chat_id)
-        return
+        if data == "menu_help":
+            await safe_edit(
+                query,
+                EXPLANATION,
+                parse_mode="Markdown",
+                reply_markup=main_menu_keyboard(user_id),
+            )
+            return
 
-    if data == "menu_mix":
-        await start_mix_training(user_id, context, chat_id)
-        return
+        if data == "menu_settings":
+            level = get_user_level(user_id)
+            daily = user_settings[user_id]["daily_enabled"]
+            text = (
+                f"⚙️ *Settings*\n\n"
+                f"Difficulty level: {level}\n"
+                f"Daily reminder: {'ON' if daily else 'OFF'}\n\n"
+                f"Choose an option:"
+            )
+            await safe_edit(
+                query,
+                text,
+                parse_mode="Markdown",
+                reply_markup=settings_keyboard(user_id),
+            )
+            return
 
-    if data == "menu_speed":
-        await start_speed_mode(user_id, context, chat_id)
-        return
+        # TOGGLE DAILY (settings)
+        if data == "toggle_daily":
+            user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
 
-    if data == "menu_repeat_errors":
-        await start_repeat_errors(user_id, context, chat_id)
-        return
+            level = get_user_level(user_id)
+            daily = user_settings[user_id]["daily_enabled"]
 
+            text = (
+                f"⚙️ *Settings*\n\n"
+                f"Difficulty level: {level}\n"
+                f"Daily reminder: {'ON' if daily else 'OFF'}\n\n"
+                f"Choose an option:"
+            )
+
+            await safe_edit(
+                query,
+                text,
+                parse_mode="Markdown",
+                reply_markup=settings_keyboard(user_id),
+            )
+            return
+
+        # TOGGLE DAILY (main menu)
+        if data == "toggle_daily_main":
+            user_settings[user_id]["daily_enabled"] = not user_settings[user_id]["daily_enabled"]
+
+            await safe_edit(
+                query,
+                "Choose a training mode 👇",
+                reply_markup=main_menu_keyboard(user_id),
+            )
+            return
+
+        # DIFFICULTY LEVEL
+        if data.startswith("level_"):
+            level = int(data.split("_")[1])
+            user_settings[user_id]["level"] = level
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="Choose a training mode👇",
+                reply_markup=main_menu_keyboard(user_id),
+            )
+            return
+
+        # NEXT BUTTONS
+        if data.endswith("_next"):
+            mode = data.split("_")[0]
+
+            if mode == "translation":
+                await start_translation_training(user_id, context, chat_id)
+            elif mode == "forms":
+                await start_forms_training(user_id, context, chat_id)
+            elif mode == "mix":
+                await start_mix_training(user_id, context, chat_id)
+            elif mode == "repeat":
+                await start_repeat_errors(user_id, context, chat_id)
+            return
+
+        # SPEED MODE STOP
+        if data == "speed_stop":
+            state = user_state.get(user_id, {})
+
+            if state.get("mode") == "speed":
+                result = (
+                    f"⏹ Speed Mode stopped.\n\n"
+                    f"Correct answers: {state.get('correct', 0)}\n"
+                    f"Total questions: {state.get('total', 0)}"
+                )
+                user_state[user_id] = {}
+
+                await safe_edit(
+                    query,
+                    result,
+                    reply_markup=main_menu_keyboard(user_id),
+                )
+            else:
+                await safe_edit(
+                    query,
+                    "Choose a training mode 👇",
+                    reply_markup=main_menu_keyboard(user_id),
+                )
+            return
+
+        # MENU TRAININGS
+        if data == "menu_train_forms":
+            await start_forms_training(user_id, context, chat_id)
+            return
+
+        if data == "menu_train_translation":
+            await start_translation_training(user_id, context, chat_id)
+            return
+
+        if data == "menu_mix":
+            await start_mix_training(user_id, context, chat_id)
+            return
+
+        if data == "menu_speed":
+            await start_speed_mode(user_id, context, chat_id)
+            return
+
+        if data == "menu_repeat_errors":
+            await start_repeat_errors(user_id, context, chat_id)
+            return
+
+        # === FALLBACK ДЛЯ НЕИЗВЕСТНЫХ CALLBACK ===
+        await safe_edit(
+            query,
+            "Choose a training mode 👇",
+            reply_markup=main_menu_keyboard(user_id),
+        )
+
+    except Exception as e:
+        print(f"Error in callback_handler: {e}")
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="⚠️ Something went wrong. Please try again.",
+                reply_markup=main_menu_keyboard(user_id),
+            )
+        except:
+            pass
 
 # === DAILY REMINDER JOBS ===
 async def daily_reminder_job(context: ContextTypes.DEFAULT_TYPE):
@@ -1035,6 +1071,15 @@ async def main():
     print("🚀 Bot LIVE!")
     await app.run_polling(drop_pending_updates=True)
 
+
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())    
+
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        # На случай, если event loop уже запущен (например, в некоторых окружениях)
+        print(f"RuntimeError in asyncio.run(main()): {e}")
+        loop = asyncio.get_event_loop()
+        loop.create_task(main())
+        loop.run_forever()       
