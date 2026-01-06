@@ -1228,14 +1228,19 @@ if __name__ == "__main__":
     asyncio.run(main())        
 =======
 
-    # Render запускает приложение внутри уже работающего event loop.
-    # Поэтому мы НЕ используем asyncio.run(), а запускаем main() в существующем цикле.
     try:
-        loop = asyncio.get_event_loop()
+        # Если цикл уже запущен (Render)
+        loop = asyncio.get_running_loop()
+        loop.create_task(main())
     except RuntimeError:
+<<<<<<< HEAD
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
     loop.create_task(main())
     loop.run_forever()       
 >>>>>>> 411b434b684cb8a5226ec9c6eca5e2ae93665148
+=======
+        # Если цикла нет (локальный запуск)
+        asyncio.run(main())    
+>>>>>>> 0f4a11dde91e2921d7289cc560ed40d1ad16c0c3
