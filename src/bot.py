@@ -1049,7 +1049,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# === FINAL ASYNC MAIN FOR RENDER ===
+# === FINAL MAIN FOR RENDER ===
 async def main():
     print("🚀 ASYNC RENDER START")
 
@@ -1074,11 +1074,4 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-
-    try:
-        # Если цикл уже запущен (Render)
-        loop = asyncio.get_running_loop()
-        loop.create_task(main())
-    except RuntimeError:
-        # Если цикла нет (локальный запуск)
-        asyncio.run(main())  
+    asyncio.run(main())
