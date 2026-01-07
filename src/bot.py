@@ -13,8 +13,18 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram import F
 from aiogram.enums import ParseMode
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 
 print("🚀 Aiogram bot starting...")
+
+# === ШАГ 1: Render hostname для вебхуков ===
+HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"https://{HOST}{WEBHOOK_PATH}"
+
+if HOST is None:
+    print("⚠️ Render hostname not available yet — webhook will be set on next restart")
 
 # === TOKEN ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -920,11 +930,42 @@ async def process_text_answer_handler(message: types.Message):
 
 
 # === START BOT ===
+from aiohttp import web
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+
+# Webhook settings
+WEBHOOK_PATH = "/webhook"
+
+HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+if HOST:
+    WEBHOOK_URL = f"https://{HOST}{WEBHOOK_PATH}"
+else:
+    WEBHOOK_URL = None
+    print("⚠️ RENDER_EXTERNAL_HOSTNAME not available yet — webhook will be set on next restart")
+
+
 async def main():
     print("🚀 Aiogram bot LIVE!")
-    await dp.start_polling(bot)
+
+    app = web.Application()
+
+    # Register webhook handler
+    SimpleRequestHandler(dp, bot).register(app, path=WEBHOOK_PATH)
+    setup_application(app, dp, bot=bot)
+
+    # Set webhook only if hostname is available
+    if WEBHOOK_URL:
+        await bot.set_webhook(WEBHOOK_URL)
+        print(f"🌐 Webhook set to: {WEBHOOK_URL}")
+    else:
+        print("⏳ Webhook not set — waiting for Render to assign hostname")
+
+    return app
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    web.run_app(
+        main(),
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 10000))
+    )
