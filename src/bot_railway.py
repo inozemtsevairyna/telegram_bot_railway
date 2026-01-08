@@ -382,51 +382,59 @@ async def process_translation_answer(user_id: int, text: str, message: types.Mes
         add_error(user_id, {"verb": verb, "mode": mode})
         reply = f"❌ Wrong!\n\nCorrect: *{verb['inf']}* — *{verb['ru']}*"
 
-    # NORMAL TRANSLATION MODE
+# === REPEAT MODE (translation) ===
+    if mode == "repeat":
+        await process_answer(message, user_id, verb, correct)
+        return
+
+# NORMAL TRANSLATION MODE
     if mode == "translation":
         await message.answer(reply, reply_markup=translation_controls_keyboard("translation"))
         return
 
-    # MIX MODE
+# MIX MODE
     if mode == "mix":
         await message.answer(reply, reply_markup=translation_controls_keyboard("mix"))
         return
 
-   # REPEAT MODE
-if mode == "repeat":
-    if correct:
-        # удаляем текущую ошибку — это всегда первый элемент
-        user_errors[user_id].pop(0)
-    else:
-        # переносим ошибку в конец
-        wrong = user_errors[user_id].pop(0)
-        user_errors[user_id].append(wrong)
 
-    # если ошибок больше нет — завершаем
-    if not user_errors[user_id]:
+# === REPEAT MODE ===
+
+async def process_answer(message: types.Message, user_id: int, verb: dict, correct: bool):
+    mode = user_state[user_id].get("mode")
+
+    if mode == "repeat":
+
+        if correct:
+            user_errors[user_id].pop(0)
+        else:
+            wrong = user_errors[user_id].pop(0)
+            user_errors[user_id].append(wrong)
+
+        if not user_errors[user_id]:
+            await message.answer(
+                "🎉 Great job! You have no more mistakes left.",
+                reply_markup=main_menu_keyboard(user_id),
+            )
+            user_state[user_id] = {}
+            return
+
+        next_error = user_errors[user_id][0]
+        next_verb = next_error["verb"]
+
+        user_state[user_id] = {
+            "mode": "repeat",
+            "verb": next_verb,
+            "repeat_mode": "translation",
+        }
+
         await message.answer(
-            "🎉 Great job! You have no more mistakes left.",
-            reply_markup=main_menu_keyboard(user_id),
+            f"Next:\n*{next_verb['inf']}*",
+            reply_markup=translation_controls_keyboard("repeat"),
         )
-        user_state[user_id] = {}
         return
 
-    # берём следующую ошибку
-    next_error = user_errors[user_id][0]
-    next_verb = next_error["verb"]
 
-    user_state[user_id] = {
-        "mode": "repeat",
-        "verb": next_verb,
-        "repeat_mode": "translation",
-    }
-
-    await message.answer(
-        reply + f"\n\nNext:\n*{next_verb['inf']}*",
-        reply_markup=translation_controls_keyboard("repeat"),
-    )
-    return
-    
 # === PROCESS FORMS ANSWER ===
 async def process_forms_answer(user_id: int, text: str, message: types.Message, mode_override=None):
     init_user(user_id)
@@ -471,6 +479,11 @@ async def process_forms_answer(user_id: int, text: str, message: types.Message, 
             f"❌ Wrong.\n\nCorrect forms:\n"
             f"{verb['inf']} — {verb['past']}, {verb['part']}"
         )
+
+    # === REPEAT MODE (forms) ===
+    if mode == "repeat":
+        await process_answer(message, user_id, verb, correct)
+        return
 
     # NORMAL FORMS MODE
     if mode == "forms":
