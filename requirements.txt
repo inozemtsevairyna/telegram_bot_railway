@@ -1,3 +1,6 @@
 aiogram==3.4.1
+aiohttp
+uvicorn
+python-dotenv
 
 
