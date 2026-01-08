@@ -392,41 +392,41 @@ async def process_translation_answer(user_id: int, text: str, message: types.Mes
         await message.answer(reply, reply_markup=translation_controls_keyboard("mix"))
         return
 
-    # REPEAT MODE
-    if mode == "repeat":
-        if correct:
-            user_errors[user_id] = [
-                e for e in user_errors[user_id]
-                if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "translation")
-            ]
-        else:
-            wrong = user_errors[user_id].pop(0)
-            user_errors[user_id].append(wrong)
+   # REPEAT MODE
+if mode == "repeat":
+    if correct:
+        # удаляем текущую ошибку — это всегда первый элемент
+        user_errors[user_id].pop(0)
+    else:
+        # переносим ошибку в конец
+        wrong = user_errors[user_id].pop(0)
+        user_errors[user_id].append(wrong)
 
-        if not user_errors[user_id]:
-            await message.answer(
-                "🎉 Great job! You have no more mistakes left.",
-                reply_markup=main_menu_keyboard(user_id),
-            )
-            user_state[user_id] = {}
-            return
-
-        next_error = user_errors[user_id][0]
-        next_verb = next_error["verb"]
-
-        user_state[user_id] = {
-            "mode": "repeat",
-            "verb": next_verb,
-            "repeat_mode": "translation",
-        }
-
+    # если ошибок больше нет — завершаем
+    if not user_errors[user_id]:
         await message.answer(
-            reply + f"\n\nNext:\n*{next_verb['inf']}*",
-            reply_markup=translation_controls_keyboard("repeat"),
+            "🎉 Great job! You have no more mistakes left.",
+            reply_markup=main_menu_keyboard(user_id),
         )
+        user_state[user_id] = {}
         return
 
+    # берём следующую ошибку
+    next_error = user_errors[user_id][0]
+    next_verb = next_error["verb"]
 
+    user_state[user_id] = {
+        "mode": "repeat",
+        "verb": next_verb,
+        "repeat_mode": "translation",
+    }
+
+    await message.answer(
+        reply + f"\n\nNext:\n*{next_verb['inf']}*",
+        reply_markup=translation_controls_keyboard("repeat"),
+    )
+    return
+    
 # === PROCESS FORMS ANSWER ===
 async def process_forms_answer(user_id: int, text: str, message: types.Message, mode_override=None):
     init_user(user_id)
