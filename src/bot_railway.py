@@ -84,6 +84,63 @@ def add_error(user_id: int, error: dict):
         for e in user_errors[user_id]
     ):
         user_errors[user_id].append(error)
+
+# ============================
+#  LEVEL SYSTEM FOR VERBS
+# ============================
+
+LEVEL_1_INF = [
+    "be","have","do","say","go","get","make","know","think","take",
+    "see","come","give","find","tell","leave","feel","put","bring",
+    "begin","keep","let","show","hear","write","sit","stand","lose",
+    "pay","meet","run","speak","read","grow","spend","build","fall",
+    "send","cut","learn","understand","draw","break","drive","buy",
+    "wear","choose","eat","drink","sleep","win","hold","sell","teach",
+    "forget","forgive","fly","lead","rise","shake","become","fight",
+    "feed","ride","ring","sing","sink","swim","throw","tear","steal",
+    "stick","strike","sweep","swing","wake","wind","withdraw",
+    "withstand","arise","awake","bite","bleed","blow","breed","burst",
+    "cast","catch","cling","creep"
+]
+
+LEVEL_2_INF = LEVEL_1_INF + [
+    "backslide","befall","beget","behold","bend","bereave","beseech",
+    "beset","bespeak","bestride","bet","betake","bid","bind","bless",
+    "broadcast","browbeat","burn","bust","can","chide","cleave",
+    "clothe","cost","crow","deal","dig","dive","dream","dwell","flee",
+    "fling","floodlight","forbear","forbid","forecast","foresee",
+    "foretell","forsake","forego","grind","hang","mishear","mislay",
+    "mislead","misread","misspell","misspend","mistake","misunderstand",
+    "miswrite","mow","offset","outbid","outdo","outfight","outgrow",
+    "output","outrun","outsell","outshine","overcome","overdo",
+    "overeat","overfly","overhang","overhear","overlay","overpay",
+    "override","overrun","oversee","overshoot","oversleep","overspend",
+    "overtake","overthrow","partake","plead","preset","prove","quit",
+    "rebind","rebuild","recast","redo","rehear","remake","rend","repay",
+    "rerun","resell","reset","retake","reteach","retell","rewind",
+    "rewrite","rid","roughcast","saw","seek","sew","shave","shear",
+    "shed","shine","shoe","shrink","shut","sight-read","slay","slide",
+    "sling","slink","slit","smell","smite","sneak","sow","speed","spell",
+    "spill","spin","spit","split","spoil","spread","spring","sting",
+    "stink","stride","string","strive","sublet","swell","thrive","thrust",
+    "tread","typecast","typeset","typewrite","unbend","unbind","unclothe",
+    "underbid","undercut","undergo","underlie","underpay","undersell",
+    "undertake","underwrite","undo","unfreeze","unhang","unhide","unhold",
+    "unknit","unlearn","unmake","unreeve","unsay","unsling","unspin",
+    "unstick","unstring","unweave","unwind","uphold","upset","waylay",
+    "weave","wed","weep","wet","withhold","wring"
+]
+
+def filter_by_level(all_verbs, level):
+    if level == 1:
+        allowed = set(LEVEL_1_INF)
+    elif level == 2:
+        allowed = set(LEVEL_2_INF)
+    else:
+        return all_verbs  # LEVEL 3 = весь список
+
+    return [v for v in all_verbs if v["inf"] in allowed]
+
  # ============================
 #  PART 2/5 — KEYBOARDS & HELP
 # ============================
@@ -179,9 +236,13 @@ EXPLANATION = (
 # === START FORMS TRAINING ===
 async def start_forms_training(user_id: int, chat_id: int):
     init_user(user_id)
-    verb = get_random_verb(get_user_level(user_id))
-    user_state[user_id] = {"mode": "forms", "verb": verb}
 
+    level = get_user_level(user_id)
+    verbs = filter_by_level(VERBS, level)
+    verb = random.choice(verbs)
+
+    user_state[user_id] = {"mode": "forms", "verb": verb}
+    
     text = (
         "📘 *Verb Forms Training*\n\n"
         f"Infinitive: *{verb['inf']}*\n"
@@ -1163,12 +1224,23 @@ def mix_controls_keyboard(prefix):
 EXPLANATION = (
     "*Past Simple vs Present Perfect*\n\n"
     "*Past Simple* — действие завершено в прошлом.\n"
-    "Сигнальные слова: yesterday, last week, in 2010.\n\n"
+    "Сигнальные слова: *yesterday, last week, in 2010, ago*.\n"
+    "Используем, когда важно *когда* произошло действие.\n"
+    "Пример: *I visited London in 2020.*\n\n"
+
     "*Present Perfect* — результат важен сейчас.\n"
-    "Сигнальные слова: already, just, yet, ever.\n\n"
-    "Главное различие:\n"
-    "Past Simple — важно *когда* произошло.\n"
-    "Present Perfect — важен *результат сейчас*."
+    "Сигнальные слова: *already, just, yet, ever, never, recently*.\n"
+    "Используем, когда важен *опыт, результат или связь с настоящим*.\n"
+    "Пример: *I have visited London twice.*\n\n"
+
+    "*Главное различие:*\n"
+    "Past Simple — действие завершено и относится к конкретному моменту в прошлом.\n"
+    "Present Perfect — действие связано с настоящим, время не указано.\n\n"
+
+    "*Типичные ошибки:*\n"
+    "• Нельзя использовать Present Perfect с указанием точного времени (*yesterday, last year*).\n"
+    "• Нельзя использовать Past Simple, если важен результат сейчас.\n\n"
+
 )
 
 
@@ -1480,12 +1552,12 @@ async def callback_handler(query: types.CallbackQuery):
         await query.answer()
 
         # BACK TO MENU
-        if data == "back_main_menu":
+        if data == "back_to_main":
             user_state[user_id] = {}
             await query.message.edit_text(
                 "Choose a training mode 👇",
-                reply_markup=main_menu_keyboard(user_id),
-            )
+                  reply_markup=main_menu_keyboard(user_id),
+           )
             return
 
         # MAIN MENU ACTIONS
