@@ -242,7 +242,7 @@ async def start_forms_training(user_id: int, chat_id: int):
     verb = random.choice(verbs)
 
     user_state[user_id] = {"mode": "forms", "verb": verb}
-    
+
     text = (
         "📘 *Verb Forms Training*\n\n"
         f"Infinitive: *{verb['inf']}*\n"
@@ -1041,7 +1041,15 @@ TELEGRAM_TOKEN = TELEGRAM_TOKEN.strip()
 if len(TELEGRAM_TOKEN) < 30:
     raise RuntimeError("❌ TELEGRAM_TOKEN looks too short")
 
-bot = Bot(token=TELEGRAM_TOKEN, parse_mode=ParseMode.MARKDOWN)
+from aiogram.client.default import DefaultBotProperties
+
+bot = Bot(
+    token=TELEGRAM_TOKEN,
+    default=DefaultBotProperties(
+        parse_mode=ParseMode.MARKDOWN
+    )
+)
+
 dp = Dispatcher()
 
 # === LOAD VERBS ===
@@ -1324,9 +1332,10 @@ async def process_translation_answer(user_id: int, text: str, message: types.Mes
     # REPEAT MODE
     if mode == "repeat":
         if correct:
+            # remove this verb from errors completely
             user_errors[user_id] = [
                 e for e in user_errors[user_id]
-                if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "translation")
+                if e["verb"]["inf"] != verb["inf"]
             ]
         else:
             wrong = user_errors[user_id].pop(0)
@@ -1334,7 +1343,7 @@ async def process_translation_answer(user_id: int, text: str, message: types.Mes
 
         if not user_errors[user_id]:
             await message.answer(
-                "🎉 Great job! You have no more mistakes left.",
+                 "🎉 Great job! You have no more mistakes left.",
                 reply_markup=main_menu_keyboard(user_id),
             )
             user_state[user_id] = {}
