@@ -35,7 +35,15 @@ TELEGRAM_TOKEN = TELEGRAM_TOKEN.strip()
 if len(TELEGRAM_TOKEN) < 30:
     raise RuntimeError("❌ TELEGRAM_TOKEN looks too short")
 
-bot = Bot(token=TELEGRAM_TOKEN, parse_mode=ParseMode.MARKDOWN)
+from aiogram.client.default import DefaultBotProperties
+
+bot = Bot(
+    token=TELEGRAM_TOKEN,
+    default=DefaultBotProperties(
+        parse_mode=ParseMode.MARKDOWN
+    )
+)
+
 dp = Dispatcher()
 
 # === LOAD VERBS ===
@@ -1017,6 +1025,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ParseMode
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
+from aiogram.client.default import DefaultBotProperties
 
 print("🚀 Aiogram bot starting on Railway...")
 
