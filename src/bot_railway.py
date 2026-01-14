@@ -17,14 +17,18 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 
 print("🚀 Aiogram bot starting...")
+print("🔥 CLEAN DEPLOY TEST")
 
-# === ШАГ 1: Render hostname для вебхуков ===
-HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+# === ШАГ 1: Railway hostname для вебхуков ===
+HOST = os.getenv("RAILWAY_PUBLIC_DOMAIN")  # Railway автоматически задаёт эту переменную
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://{HOST}{WEBHOOK_PATH}"
 
-if HOST is None:
-    print("⚠️ Render hostname not available yet — webhook will be set on next restart")
+if HOST:
+    WEBHOOK_URL = f"https://{HOST}{WEBHOOK_PATH}"
+    print(f"🌐 Railway domain detected: {HOST}")
+else:
+    WEBHOOK_URL = None
+    print("⏳ Railway domain not available yet — webhook will be set later")
 
 # === TOKEN ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
