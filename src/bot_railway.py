@@ -38,6 +38,32 @@ VERBS_PATH = os.path.join(BASE_DIR, "verbs.json")
 with open(VERBS_PATH, "r", encoding="utf-8") as f:
     VERBS = json.load(f)
 
+EXPLANATION = (
+    "*Past Simple vs Present Perfect*\n\n"
+
+    "*Past Simple* — действие завершено в прошлом.\n"
+    "Сигнальные слова: *yesterday, last week, in 2010, ago*.\n"
+    "Используем, когда важно *когда* произошло действие.\n"
+    "Пример: *I visited London in 2020.*\n\n"
+
+    "*Present Perfect* — результат важен сейчас.\n"
+    "Сигнальные слова: *already, just, yet, ever, never, recently*.\n"
+    "Используем, когда важен *опыт, результат или связь с настоящим*.\n"
+    "Пример: *I have visited London twice.*\n\n"
+
+    "*Формы глагола и времена:*\n"
+    "• *Past Simple* → используется *вторая форма* глагола (V2).\n"
+    "• *Present Perfect* → используется *третья форма* глагола (V3, Participle).\n\n"
+
+    "*Главное различие:*\n"
+    "Past Simple — действие завершено и относится к конкретному моменту в прошлом.\n"
+    "Present Perfect — действие связано с настоящим, время не указано.\n\n"
+
+    "*Типичные ошибки:*\n"
+    "• Нельзя использовать Present Perfect с указанием точного времени (*yesterday, last year*).\n"
+    "• Нельзя использовать Past Simple, если важен результат сейчас.\n"
+)
+
 # ============================
 #  USER STORAGE
 # ============================
@@ -113,6 +139,15 @@ def speed_kb():
         [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
     ])
 
+def difficulty_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="1️⃣ Level 1", callback_data="difficulty_1"),
+            InlineKeyboardButton(text="2️⃣ Level 2", callback_data="difficulty_2"),
+            InlineKeyboardButton(text="3️⃣ Level 3", callback_data="difficulty_3"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Back", callback_data="menu_settings")]
+    ])
 
 # ============================
 #  TRAINING START FUNCTIONS
@@ -125,7 +160,11 @@ async def start_forms(uid, cid):
 
     await bot.send_message(
         cid,
-        f"📘 *Verb Forms*\n\nInfinitive: *{verb['inf']}*\nTranslation: *{verb['ru']}*\n\nType V2 + V3.",
+        f"📘 *Verb Forms*\n\n"
+        f"Infinitive: *{verb['inf']}*\n"
+        f"Translation: *{verb['ru']}*\n\n"
+        f"Write the 2nd and 3rd forms of the verb.\n"
+        f"Example: go → went, gone",
         reply_markup=forms_kb("forms")
     )
 
@@ -150,9 +189,13 @@ async def start_mix(uid, cid):
     user_state[uid] = {"mode": "mix", "sub": sub, "verb": verb}
 
     if sub == "forms":
-        await bot.send_message(
-            cid,
-            f"🎲 *Mix — Forms*\n\nInfinitive: *{verb['inf']}*\nTranslation: *{verb['ru']}*",
+       await bot.send_message(
+           cid,
+            f"🎲 *Mix — Forms*\n\n"
+            f"Infinitive: *{verb['inf']}*\n"
+            f"Translation: *{verb['ru']}*\n\n"
+            f"Write the 2nd and 3rd forms of the verb.\n"
+            f"Example: go → went, gone",
             reply_markup=forms_kb("mix")
         )
     else:
@@ -330,6 +373,10 @@ async def cb(q: types.CallbackQuery):
         return
 
     # MAIN MENU ACTIONS
+    if data == "menu_help":
+        await q.message.edit_text(EXPLANATION, reply_markup=main_menu(uid))
+        return
+
     if data == "menu_forms":
         await start_forms(uid, cid)
         return
@@ -337,6 +384,23 @@ async def cb(q: types.CallbackQuery):
     if data == "menu_translation":
         await start_translation(uid, cid)
         return
+    
+    if data == "menu_difficulty":
+        await q.message.edit_text(
+               "Choose difficulty level:",
+             reply_markup=difficulty_kb()
+    )
+    return
+
+    if data.startswith("difficulty_"):
+       level = int(data.split("_")[1])
+       user_settings[uid]["level"] = level
+
+    await q.message.edit_text(
+        f"Difficulty level set to {level}.",
+        reply_markup=main_menu(uid)
+    )
+    return
 
     if data == "menu_mix":
         await start_mix(uid, cid)
@@ -383,13 +447,20 @@ async def cb(q: types.CallbackQuery):
     if data == "menu_settings":
         lvl = get_user_level(uid)
         daily = user_settings[uid]["daily_enabled"]
-        await q.message.edit_text(
-            f"⚙️ Settings\n\n"
-            f"Level: {lvl}\n"
-            f"Daily: {'ON' if daily else 'OFF'}",
-            reply_markup=main_menu(uid)
-        )
-        return
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+             [InlineKeyboardButton(text="🎚 Difficulty", callback_data="menu_difficulty")],
+             [InlineKeyboardButton(text="🔔 Daily reminder", callback_data="toggle_daily")],
+             [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
+       ])
+
+    await q.message.edit_text(
+        f"⚙️ Settings\n\n"
+        f"Difficulty level: {lvl}\n"
+        f"Daily: {'ON' if daily else 'OFF'}",
+        reply_markup=kb
+    )
+    return
 
     if data == "toggle_daily":
         user_settings[uid]["daily_enabled"] = not user_settings[uid]["daily_enabled"]
@@ -489,50 +560,3 @@ async def text_handler(msg: types.Message):
     if mode == "speed":
         await process_speed(uid, text, msg)
         return
-# ============================
-#  WEBHOOK SERVER (RAILWAY)
-# ============================
-
-app = web.Application()
-
-
-async def on_startup():
-    print("🚀 Bot LIVE on Railway")
-
-    # Register webhook handler
-    SimpleRequestHandler(dp, bot).register(app, path=WEBHOOK_PATH)
-
-    # Attach dispatcher to aiohttp app
-    setup_application(app, dp, bot=bot)
-
-    # Set webhook if Railway domain is available
-    if WEBHOOK_URL:
-        await bot.set_webhook(WEBHOOK_URL)
-        print(f"🌐 Webhook set: {WEBHOOK_URL}")
-    else:
-        print("⏳ Waiting for Railway domain...")
-
-
-# Health check (Railway pings this)
-async def health(request):
-    return web.Response(text="OK")
-
-
-# Register health endpoints
-app.router.add_get("/", health)
-app.router.add_get("/health", health)
-
-
-# Main entry point
-async def main():
-    await on_startup()
-    return app
-
-
-# Run server
-if __name__ == "__main__":
-    web.run_app(
-        main(),
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 8080))
-    )
