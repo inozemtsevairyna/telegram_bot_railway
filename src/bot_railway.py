@@ -229,14 +229,29 @@ def mix_controls_keyboard(prefix):
 # === HELP TEXT ===
 EXPLANATION = (
     "*Past Simple vs Present Perfect*\n\n"
+
     "*Past Simple* — действие завершено в прошлом.\n"
-    "Сигнальные слова: yesterday, last week, in 2010.\n\n"
+    "Сигнальные слова: *yesterday, last week, in 2010, ago*.\n"
+    "Используем, когда важно *когда* произошло действие.\n"
+    "Пример: *I visited London in 2020.*\n\n"
+
     "*Present Perfect* — результат важен сейчас.\n"
-    "Сигнальные слова: already, just, yet, ever.\n\n"
-    "Главное различие:\n"
-    "Past Simple — важно *когда* произошло.\n"
-    "Present Perfect — важен *результат сейчас*."
-)       
+    "Сигнальные слова: *already, just, yet, ever, never, recently*.\n"
+    "Используем, когда важен *опыт, результат или связь с настоящим*.\n"
+    "Пример: *I have visited London twice.*\n\n"
+
+    "*Формы глагола и времена:*\n"
+    "• *Past Simple* → используется *вторая форма* глагола (V2).\n"
+    "• *Present Perfect* → используется *третья форма* глагола (V3, Participle).\n\n"
+
+    "*Главное различие:*\n"
+    "Past Simple — действие завершено и относится к конкретному моменту в прошлом.\n"
+    "Present Perfect — действие связано с настоящим, время не указано.\n\n"
+
+    "*Типичные ошибки:*\n"
+    "• Нельзя использовать Present Perfect с указанием точного времени (*yesterday, last year*).\n"
+    "• Нельзя использовать Past Simple, если важен результат сейчас.\n"
+) 
 # ============================
 #  PART 3/5 — TRAINING MODES
 # ============================
@@ -256,7 +271,7 @@ async def start_forms_training(user_id: int, chat_id: int):
         f"Infinitive: *{verb['inf']}*\n"
         f"Translation: *{verb['ru']}*\n\n"
         "Type the 2nd and 3rd verb forms.\n"
-        "Example: *went gone*"
+        "Example: *2nd form + 3rd form → went gone*"
     )
 
     await bot.send_message(
@@ -971,40 +986,60 @@ async def process_text_answer_handler(message: types.Message):
 
     mode = state["mode"]
 
-    # FORMS + REPEAT(FORMS)
-    if mode in ("forms", "repeat"):
-        repeat_mode = state.get("repeat_mode")
-        if mode == "repeat" and repeat_mode == "translation":
-            await process_translation_answer(user_id, text, message, mode_override="repeat")
+    # === REPEAT MODE ===
+    if mode == "repeat":
+        repeat_mode = state.get("repeat_mode", "forms")
+        if repeat_mode == "translation":
+            await process_translation_answer(
+                user_id,
+                text,
+                message,
+                mode_override="repeat",
+            )
         else:
             await process_forms_answer(
                 user_id,
                 text,
                 message,
-                mode_override="repeat" if mode == "repeat" else None,
+                mode_override="repeat",
             )
         return
 
-    # TRANSLATION
+    # === FORMS MODE ===
+    if mode == "forms":
+        await process_forms_answer(user_id, text, message)
+        return
+
+    # === TRANSLATION MODE ===
     if mode == "translation":
         await process_translation_answer(user_id, text, message)
         return
 
-    # MIX
+    # === MIX MODE ===
     if mode == "mix":
         submode = state.get("submode", "forms")
         if submode == "forms":
-            await process_forms_answer(user_id, text, message, mode_override="mix")
+            await process_forms_answer(
+                user_id,
+                text,
+                message,
+                mode_override="mix",
+            )
         else:
-            await process_translation_answer(user_id, text, message, mode_override="mix")
+            await process_translation_answer(
+                user_id,
+                text,
+                message,
+                mode_override="mix",
+            )
         return
 
-    # SPEED
+    # === SPEED MODE ===
     if mode == "speed":
         await process_speed_answer(user_id, text, message)
         return
 
-    # FALLBACK
+    # === FALLBACK ===
     await message.answer(
         "Ready to practise? Choose a training mode 👇",
         reply_markup=main_menu_keyboard(user_id),
@@ -1103,9 +1138,12 @@ def get_user_level(user_id: int) -> int:
 
 
 def get_random_verb(level: int):
-    if level == 1 and len(VERBS) > 100:
-        return random.choice(VERBS[:100])
-    return random.choice(VERBS)
+    if level == 1:
+        return random.choice(VERBS[:50])
+    elif level == 2:
+        return random.choice(VERBS[:150])
+    else:
+        return random.choice(VERBS)
 
 
 def add_error(user_id: int, error: dict):
@@ -1341,10 +1379,9 @@ async def process_translation_answer(user_id: int, text: str, message: types.Mes
     # REPEAT MODE
     if mode == "repeat":
         if correct:
-            # remove this verb from errors completely
-            user_errors[user_id] = [
-                e for e in user_errors[user_id]
-                if e["verb"]["inf"] != verb["inf"]
+           user_errors[user_id] = [
+               e for e in user_errors[user_id]
+               if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "translation")
             ]
         else:
             wrong = user_errors[user_id].pop(0)
@@ -1431,35 +1468,41 @@ async def process_forms_answer(user_id: int, text: str, message: types.Message, 
 
     # REPEAT MODE
     if mode == "repeat":
-        if correct:
-            user_errors[user_id] = [
-                e for e in user_errors[user_id]
-                if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "forms")
-            ]
+       if correct:
+        # удаляем только ошибки по формам для этого глагола
+        user_errors[user_id] = [
+            e for e in user_errors[user_id]
+            if not (e["verb"]["inf"] == verb["inf"] and e["mode"] == "forms")
+        ]
+    else:
+        # переносим текущую ошибку в конец списка
+        wrong = user_errors[user_id].pop(0)
+        user_errors[user_id].append(wrong)
 
-        if not user_errors[user_id]:
-            await message.answer(
-                "🎉 Great job! You have no more mistakes left.",
-                reply_markup=main_menu_keyboard(user_id),
-            )
-            user_state[user_id] = {}
-            return
-
-        next_error = user_errors[user_id][0]
-        next_verb = next_error["verb"]
-
-        user_state[user_id] = {
-            "mode": "repeat",
-            "verb": next_verb,
-            "repeat_mode": "forms",
-        }
-
+    # если ошибок больше нет
+    if not user_errors[user_id]:
         await message.answer(
-            reply + f"\n\nNext:\n*{next_verb['inf']}* — {next_verb['ru']}",
-            reply_markup=forms_controls_keyboard("repeat"),
+            "🎉 Great job! You have no more mistakes left.",
+            reply_markup=main_menu_keyboard(user_id),
         )
+        user_state[user_id] = {}
         return
 
+    # следующая ошибка
+    next_error = user_errors[user_id][0]
+    next_verb = next_error["verb"]
+
+    user_state[user_id] = {
+        "mode": "repeat",
+        "verb": next_verb,
+        "repeat_mode": "forms",
+    }
+
+    await message.answer(
+        reply + f"\n\nNext:\n*{next_verb['inf']}* — {next_verb['ru']}",
+        reply_markup=forms_controls_keyboard("repeat"),
+    )
+    return
 
 # === PROCESS SPEED ANSWER ===
 async def process_speed_answer(user_id: int, text: str, message: types.Message):
@@ -1570,13 +1613,13 @@ async def callback_handler(query: types.CallbackQuery):
         await query.answer()
 
         # BACK TO MENU
-        if data == "back_to_main":
-            user_state[user_id] = {}
-            await query.message.edit_text(
+        if data == "back_main_menu":
+           user_state[user_id] = {}
+           await query.message.edit_text(
                 "Choose a training mode 👇",
-                  reply_markup=main_menu_keyboard(user_id),
-           )
-            return
+                 reply_markup=main_menu_keyboard(user_id),
+          )
+           return
 
         # MAIN MENU ACTIONS
         if data == "menu_stats":
