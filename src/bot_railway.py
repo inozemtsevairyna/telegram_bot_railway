@@ -346,55 +346,53 @@ async def process_speed(uid, text, msg):
         await msg.answer(result, reply_markup=main_menu(uid))
         return
 
-# NORMAL PROCESSING
+    # NORMAL PROCESSING
+    if "verb" not in st:
+        await msg.answer("Session expired. Choose a mode 👇", reply_markup=main_menu(uid))
+        return
 
-# если состояние сброшено — не падаем
-if "verb" not in st:
-    await msg.answer("Session expired. Choose a mode 👇", reply_markup=main_menu(uid))
-    return
+    verb = st["verb"]
+    ans = norm(text)
 
-verb = st["verb"]
-ans = norm(text)
+    past_forms = normalize_forms(verb["past"])
+    part_forms = normalize_forms(verb["part"])
 
-past_forms = normalize_forms(verb["past"])
-part_forms = normalize_forms(verb["part"])
+    ok = (
+        len(ans) >= 2 and
+        ans[0] in past_forms and
+        ans[1] in part_forms
+    )
 
-ok = (
-    len(ans) >= 2 and
-    ans[0] in past_forms and
-    ans[1] in part_forms
-)
+    st["total"] += 1
 
-st["total"] += 1
+    if ok:
+        st["correct"] += 1
+        reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
+    else:
+        st["wrong"].append({
+            "inf": verb["inf"],
+            "past": verb["past"],
+            "part": verb["part"],
+            "ru": verb["ru"],
+        })
+        reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
 
-if ok:
-    st["correct"] += 1
-    reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
-else:
-    st["wrong"].append({
-        "inf": verb["inf"],
-        "past": verb["past"],
-        "part": verb["part"],
-        "ru": verb["ru"],
-    })
-    reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
+    await msg.answer(reply)
 
-await msg.answer(reply)
+    # NEW QUESTION
+    new_verb = get_random_verb(get_user_level(uid))
+    st["verb"] = new_verb
 
-# NEW QUESTION
-new_verb = get_random_verb(get_user_level(uid))
-st["verb"] = new_verb
+    remaining = max(0, int(st["end"] - time.time()))
 
-remaining = max(0, int(st["end"] - time.time()))
-
-await msg.answer(
-    f"⚡ *Speed Mode*\n"
-    f"Left: {remaining} sec\n"
-    f"Correct: {st['correct']} / {st['total']}\n\n"
-    f"Infinitive: *{new_verb['inf']}*\n"
-    f"Translation: *{new_verb['ru']}*",
-    reply_markup=speed_kb()
-)
+    await msg.answer(
+        f"⚡ *Speed Mode*\n"
+        f"Left: {remaining} sec\n"
+        f"Correct: {st['correct']} / {st['total']}\n\n"
+        f"Infinitive: *{new_verb['inf']}*\n"
+        f"Translation: *{new_verb['ru']}*",
+        reply_markup=speed_kb()
+    )
 # ============================
 #  CALLBACK HANDLER
 # ============================
