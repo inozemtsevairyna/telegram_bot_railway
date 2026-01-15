@@ -560,3 +560,31 @@ async def text_handler(msg: types.Message):
     if mode == "speed":
         await process_speed(uid, text, msg)
         return
+# ============================
+#  WEBHOOK SERVER
+# ============================
+
+async def on_startup(app):
+    # Устанавливаем вебхук
+    await bot.set_webhook(WEBHOOK_URL)
+    print(f"🌐 Webhook set: {WEBHOOK_URL}")
+
+async def on_shutdown(app):
+    await bot.session.close()
+
+# Создаём aiohttp приложение
+app = web.Application()
+
+# Регистрируем обработчик вебхука
+SimpleRequestHandler(dp, bot).register(app, path=WEBHOOK_PATH)
+
+# Подключаем aiogram к aiohttp
+setup_application(app, dp, bot=bot)
+
+# Регистрируем события
+app.on_startup.append(on_startup)
+app.on_shutdown.append(on_shutdown)
+
+# Запуск сервера
+if __name__ == "__main__":
+    web.run_app(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
