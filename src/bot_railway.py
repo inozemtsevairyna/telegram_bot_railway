@@ -367,13 +367,17 @@ async def cb(q: types.CallbackQuery):
     data = q.data
     init_user(uid)
 
+    # ============================
     # BACK
+    # ============================
     if data == "back":
         user_state[uid] = {}
         await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
         return
 
+    # ============================
     # MAIN MENU ACTIONS
+    # ============================
     if data == "menu_help":
         await q.message.edit_text(EXPLANATION, reply_markup=main_menu(uid))
         return
@@ -385,23 +389,6 @@ async def cb(q: types.CallbackQuery):
     if data == "menu_translation":
         await start_translation(uid, cid)
         return
-    
-    if data == "menu_difficulty":
-        await q.message.edit_text(
-               "Choose difficulty level:",
-             reply_markup=difficulty_kb()
-    )
-    return
-
-    if data.startswith("difficulty_"):
-       level = int(data.split("_")[1])
-       user_settings[uid]["level"] = level
-
-    await q.message.edit_text(
-        f"Difficulty level set to {level}.",
-        reply_markup=main_menu(uid)
-    )
-    return
 
     if data == "menu_mix":
         await start_mix(uid, cid)
@@ -445,30 +432,55 @@ async def cb(q: types.CallbackQuery):
         )
         return
 
+    # ============================
+    # SETTINGS
+    # ============================
     if data == "menu_settings":
         lvl = get_user_level(uid)
         daily = user_settings[uid]["daily_enabled"]
 
         kb = InlineKeyboardMarkup(inline_keyboard=[
-             [InlineKeyboardButton(text="🎚 Difficulty", callback_data="menu_difficulty")],
-             [InlineKeyboardButton(text="🔔 Daily reminder", callback_data="toggle_daily")],
-             [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
-       ])
+            [InlineKeyboardButton(text="🎚 Difficulty", callback_data="menu_difficulty")],
+            [InlineKeyboardButton(text="🔔 Daily reminder", callback_data="toggle_daily")],
+            [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
+        ])
 
-    await q.message.edit_text(
-        f"⚙️ Settings\n\n"
-        f"Difficulty level: {lvl}\n"
-        f"Daily: {'ON' if daily else 'OFF'}",
-        reply_markup=kb
-    )
-    return
+        await q.message.edit_text(
+            f"⚙️ Settings\n\n"
+            f"Difficulty level: {lvl}\n"
+            f"Daily: {'ON' if daily else 'OFF'}",
+            reply_markup=kb
+        )
+        return
 
     if data == "toggle_daily":
         user_settings[uid]["daily_enabled"] = not user_settings[uid]["daily_enabled"]
         await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
         return
 
+    # ============================
+    # DIFFICULTY
+    # ============================
+    if data == "menu_difficulty":
+        await q.message.edit_text(
+            "Choose difficulty level:",
+            reply_markup=difficulty_kb()
+        )
+        return
+
+    if data.startswith("difficulty_"):
+        level = int(data.split("_")[1])
+        user_settings[uid]["level"] = level
+
+        await q.message.edit_text(
+            f"Difficulty level set to {level}.",
+            reply_markup=main_menu(uid)
+        )
+        return
+
+    # ============================
     # NEXT BUTTONS
+    # ============================
     if data.endswith("_next"):
         mode = data.split("_")[0]
 
@@ -480,9 +492,12 @@ async def cb(q: types.CallbackQuery):
             await start_mix(uid, cid)
         elif mode == "repeat":
             await start_mix(uid, cid)
+
         return
 
+    # ============================
     # SPEED STOP
+    # ============================
     if data == "speed_stop":
         st = user_state.get(uid, {})
         await q.message.edit_text(
@@ -491,7 +506,6 @@ async def cb(q: types.CallbackQuery):
         )
         user_state[uid] = {}
         return
-
 
 # ============================
 #  COMMANDS
