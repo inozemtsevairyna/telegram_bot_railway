@@ -140,6 +140,7 @@ def speed_kb():
         [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
     ])
 
+
 def difficulty_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -257,6 +258,18 @@ async def process_translation(uid, text, msg, mode=None):
         await msg.answer(reply, reply_markup=translation_kb("translation"))
 
 
+# ============================
+#  FORMS PROCESSING
+# ============================
+
+def normalize_forms(value):
+    if isinstance(value, list):
+        return [v.lower().strip() for v in value]
+    if isinstance(value, str):
+        return [v.lower().strip() for v in value.split("/")]
+    return []
+
+
 async def process_forms(uid, text, msg, mode=None):
     init_user(uid)
     st = user_state.get(uid, {})
@@ -264,10 +277,13 @@ async def process_forms(uid, text, msg, mode=None):
 
     ans = norm(text)
 
+    past_forms = normalize_forms(verb["past"])
+    part_forms = normalize_forms(verb["part"])
+
     ok = (
         len(ans) >= 2 and
-        ans[0] in verb["past"].lower().split("/") and
-        ans[1] in verb["part"].lower().split("/")
+        ans[0] in past_forms and
+        ans[1] in part_forms
     )
 
     if ok:
@@ -284,6 +300,10 @@ async def process_forms(uid, text, msg, mode=None):
     else:
         await msg.answer(reply, reply_markup=forms_kb("forms"))
 
+
+# ============================
+#  SPEED MODE
+# ============================
 
 async def process_speed(uid, text, msg):
     init_user(uid)
@@ -320,10 +340,13 @@ async def process_speed(uid, text, msg):
     verb = st["verb"]
     ans = norm(text)
 
+    past_forms = normalize_forms(verb["past"])
+    part_forms = normalize_forms(verb["part"])
+
     ok = (
         len(ans) >= 2 and
-        ans[0] in verb["past"].lower().split("/") and
-        ans[1] in verb["part"].lower().split("/")
+        ans[0] in past_forms and
+        ans[1] in part_forms
     )
 
     st["total"] += 1
@@ -436,25 +459,30 @@ async def cb(q: types.CallbackQuery):
     # SETTINGS
     # ============================
     if data == "menu_settings":
-        lvl = get_user_level(uid)
-        daily = user_settings[uid]["daily_enabled"]
+       # гарантируем, что настройки существуют
+       user_settings.setdefault(uid, {"daily_enabled": False})
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎚 Difficulty", callback_data="menu_difficulty")],
-            [InlineKeyboardButton(text="🔔 Daily reminder", callback_data="toggle_daily")],
-            [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
-        ])
+       lvl = get_user_level(uid)
+       daily = user_settings[uid]["daily_enabled"]
 
-        await q.message.edit_text(
-            f"⚙️ Settings\n\n"
-            f"Difficulty level: {lvl}\n"
-            f"Daily: {'ON' if daily else 'OFF'}",
-            reply_markup=kb
+       kb = InlineKeyboardMarkup(inline_keyboard=[
+           [InlineKeyboardButton(text="🎚 Difficulty", callback_data="menu_difficulty")],
+           [InlineKeyboardButton(text="🔔 Daily reminder", callback_data="toggle_daily")],
+           [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
+       ])
+
+       await q.message.edit_text(
+           f"⚙️ Settings\n\n"
+           f"Difficulty level: {lvl}\n"
+           f"Daily: {'ON' if daily else 'OFF'}",
+           reply_markup=kb
         )
-        return
+       return
 
     if data == "toggle_daily":
+        user_settings.setdefault(uid, {"daily_enabled": False})
         user_settings[uid]["daily_enabled"] = not user_settings[uid]["daily_enabled"]
+
         await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
         return
 
