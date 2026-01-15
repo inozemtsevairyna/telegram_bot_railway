@@ -237,6 +237,11 @@ def norm(text):
 async def process_translation(uid, text, msg, mode=None):
     init_user(uid)
     st = user_state.get(uid, {})
+
+    if "verb" not in st:
+        await msg.answer("Session expired. Choose a mode 👇", reply_markup=main_menu(uid))
+        return
+
     verb = st["verb"]
 
     expected = [p.strip() for p in verb["ru"].lower().replace(",", "/").split("/")]
@@ -273,6 +278,11 @@ def normalize_forms(value):
 async def process_forms(uid, text, msg, mode=None):
     init_user(uid)
     st = user_state.get(uid, {})
+
+    if "verb" not in st:
+        await msg.answer("Session expired. Choose a mode 👇", reply_markup=main_menu(uid))
+        return
+
     verb = st["verb"]
 
     ans = norm(text)
@@ -336,49 +346,55 @@ async def process_speed(uid, text, msg):
         await msg.answer(result, reply_markup=main_menu(uid))
         return
 
-    # NORMAL PROCESSING
-    verb = st["verb"]
-    ans = norm(text)
+# NORMAL PROCESSING
 
-    past_forms = normalize_forms(verb["past"])
-    part_forms = normalize_forms(verb["part"])
+# если состояние сброшено — не падаем
+if "verb" not in st:
+    await msg.answer("Session expired. Choose a mode 👇", reply_markup=main_menu(uid))
+    return
 
-    ok = (
-        len(ans) >= 2 and
-        ans[0] in past_forms and
-        ans[1] in part_forms
-    )
+verb = st["verb"]
+ans = norm(text)
 
-    st["total"] += 1
+past_forms = normalize_forms(verb["past"])
+part_forms = normalize_forms(verb["part"])
 
-    if ok:
-        st["correct"] += 1
-        reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
-    else:
-        st["wrong"].append({
-            "inf": verb["inf"],
-            "past": verb["past"],
-            "part": verb["part"],
-            "ru": verb["ru"],
-        })
-        reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
+ok = (
+    len(ans) >= 2 and
+    ans[0] in past_forms and
+    ans[1] in part_forms
+)
 
-    await msg.answer(reply)
+st["total"] += 1
 
-    # NEW QUESTION
-    new_verb = get_random_verb(get_user_level(uid))
-    st["verb"] = new_verb
+if ok:
+    st["correct"] += 1
+    reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
+else:
+    st["wrong"].append({
+        "inf": verb["inf"],
+        "past": verb["past"],
+        "part": verb["part"],
+        "ru": verb["ru"],
+    })
+    reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
 
-    remaining = max(0, int(st["end"] - time.time()))
+await msg.answer(reply)
 
-    await msg.answer(
-        f"⚡ *Speed Mode*\n"
-        f"Left: {remaining} sec\n"
-        f"Correct: {st['correct']} / {st['total']}\n\n"
-        f"Infinitive: *{new_verb['inf']}*\n"
-        f"Translation: *{new_verb['ru']}*",
-        reply_markup=speed_kb()
-    )
+# NEW QUESTION
+new_verb = get_random_verb(get_user_level(uid))
+st["verb"] = new_verb
+
+remaining = max(0, int(st["end"] - time.time()))
+
+await msg.answer(
+    f"⚡ *Speed Mode*\n"
+    f"Left: {remaining} sec\n"
+    f"Correct: {st['correct']} / {st['total']}\n\n"
+    f"Infinitive: *{new_verb['inf']}*\n"
+    f"Translation: *{new_verb['ru']}*",
+    reply_markup=speed_kb()
+)
 # ============================
 #  CALLBACK HANDLER
 # ============================
