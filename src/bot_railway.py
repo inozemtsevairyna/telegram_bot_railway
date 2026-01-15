@@ -1,3 +1,4 @@
+print("🔥 FILE LOADED: bot_railway.py")
 import os
 import json
 import random
