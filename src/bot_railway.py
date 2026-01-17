@@ -15,7 +15,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 #  CONFIG
 # ============================
 
-HOST = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+HOST = os.getenv("RAILWAY_STATIC_URL")
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://{HOST}{WEBHOOK_PATH}" if HOST else None
 
@@ -623,16 +623,22 @@ async def text_handler(msg: types.Message):
 
 async def on_startup(app):
     # Устанавливаем вебхук
+    if not WEBHOOK_URL:
+        print("❗ WEBHOOK_URL is missing — webhook not set")
+        return
+
     await bot.set_webhook(WEBHOOK_URL)
     print(f"🌐 Webhook set: {WEBHOOK_URL}")
+
 
 async def on_shutdown(app):
     await bot.session.close()
 
+
 # Создаём aiohttp приложение
 app = web.Application()
 
-# Регистрируем обработчик вебхука
+# Регистрируем обработчик вебхука (ОБЯЗАТЕЛЬНО!)
 SimpleRequestHandler(dp, bot).register(app, path=WEBHOOK_PATH)
 
 # Подключаем aiogram к aiohttp
