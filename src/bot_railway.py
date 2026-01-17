@@ -475,7 +475,9 @@ async def cb(q: types.CallbackQuery):
     # ============================
     if data == "menu_settings":
         # гарантируем, что настройки существуют и содержат ВСЕ ключи
-        user_settings.setdefault(uid, {"daily_enabled": False, "level": 1})
+        user_settings.setdefault(uid, {})
+        user_settings[uid].setdefault("daily_enabled", False)
+        user_settings[uid].setdefault("level", 1)
 
         lvl = user_settings[uid]["level"]
         daily = user_settings[uid]["daily_enabled"]
@@ -497,7 +499,9 @@ async def cb(q: types.CallbackQuery):
 
     if data == "toggle_daily":
         # тоже гарантируем, что структура настроек полная
-        user_settings.setdefault(uid, {"daily_enabled": False, "level": 1})
+        user_settings.setdefault(uid, {})
+        user_settings[uid].setdefault("daily_enabled", False)
+        user_settings[uid].setdefault("level", 1)
 
         user_settings[uid]["daily_enabled"] = not user_settings[uid]["daily_enabled"]
 
