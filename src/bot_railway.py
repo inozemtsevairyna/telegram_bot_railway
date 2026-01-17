@@ -399,6 +399,7 @@ async def process_speed(uid, text, msg):
 
 @dp.callback_query()
 async def cb(q: types.CallbackQuery):
+    await q.answer()   # подтверждаем callback сразу
     uid = q.from_user.id
     cid = q.message.chat.id
     data = q.data
