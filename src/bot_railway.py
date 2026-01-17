@@ -85,7 +85,10 @@ def get_user_level(uid):
 
 def get_random_verb(level):
     available = [v for v in verbs if v.get("level", 1) <= level]
-    return random.choice(available)
+    verb = random.choice(available)
+    print("DEBUG LEVEL REQUESTED:", level)
+    print("DEBUG VERB SELECTED:", verb["inf"], "LEVEL:", verb["level"])
+    return verb
 
 def add_error(uid, error):
     if not any(e["verb"]["inf"] == error["verb"]["inf"] and e["mode"] == error["mode"] for e in user_errors[uid]):
