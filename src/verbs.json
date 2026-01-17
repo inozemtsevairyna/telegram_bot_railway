@@ -1,8 +1,8 @@
 [
     { "inf": "arise", "past": "arose", "part": "arisen", "ru": "возникать, появляться, восставать", "irregular": true, "level": 3 },
-    { "inf": "awake", "past": "awoke", "part": "awoken", "ru": "просыпаться, пробждаться", "irregular": true, "level": 3 },
+    { "inf": "awake", "past": "awoke", "part": "awoken", "ru": "просыпаться, пробуждаться", "irregular": true, "level": 3 },
     { "inf": "backslide", "past": "backslid", "part": "backslid/backslidden", "ru": "отступать, ухудшаться, возвращаться к прежним привычкам", "irregular": true, "level": 3 },
-    { "inf": "be", "past": "was/were", "part": "been", "ru": "быть", "irregular": true, "level": 1 },
+    { "inf": "be", "past": ["was", "were"], "part": "been", "ru": "быть", "irregular": true, "level": 1 },
     { "inf": "bear", "past": "bore", "part": "born/borne", "ru": "выносить, рожать, терпеть", "irregular": true, "level": 2 },
     { "inf": "beat", "past": "beat", "part": "beaten", "ru": "бить, побеждать, превосходить", "irregular": true, "level": 2 },
     { "inf": "become", "past": "became", "part": "become", "ru": "становиться, быть к лицу", "irregular": true, "level": 1 },

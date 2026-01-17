@@ -37,7 +37,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 VERBS_PATH = os.path.join(BASE_DIR, "verbs.json")
 
 with open(VERBS_PATH, "r", encoding="utf-8") as f:
-    VERBS = json.load(f)
+    verbs = json.load(f)
 
 EXPLANATION = (
     "*Past Simple vs Present Perfect*\n\n"
@@ -85,10 +85,10 @@ def get_user_level(uid):
 
 def get_random_verb(level):
     if level == 1:
-        return random.choice(VERBS[:50])
+        return random.choice(verbs[:50])
     elif level == 2:
-        return random.choice(VERBS[:150])
-    return random.choice(VERBS)
+        return random.choice(verbs[:150])
+    return random.choice(verbs)
 
 def add_error(uid, error):
     if not any(e["verb"]["inf"] == error["verb"]["inf"] and e["mode"] == error["mode"] for e in user_errors[uid]):
@@ -293,9 +293,8 @@ async def process_forms(uid, text, msg, mode=None):
     ok = (
         len(ans) >= 2 and
         ans[0] in past_forms and
-        ans[1] in part_forms
+        " ".join(ans[1:]) in part_forms
     )
-
     if ok:
         user_stats[uid]["correct"] += 1
         reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
@@ -380,19 +379,15 @@ async def process_speed(uid, text, msg):
     await msg.answer(reply)
 
     # NEW QUESTION
-    new_verb = get_random_verb(get_user_level(uid))
-    st["verb"] = new_verb
+    def get_random_verb(level):
+        # выбираем только те глаголы, чей уровень <= уровня пользователя
+        available = [v for v in verbs if v.get("level", 1) <= level]
 
-    remaining = max(0, int(st["end"] - time.time()))
+        # если вдруг список пуст (например, уровень 1, а все глаголы имеют level 2+)
+        if not available:
+            available = verbs  # fallback, чтобы бот не упал
 
-    await msg.answer(
-        f"⚡ *Speed Mode*\n"
-        f"Left: {remaining} sec\n"
-        f"Correct: {st['correct']} / {st['total']}\n\n"
-        f"Infinitive: *{new_verb['inf']}*\n"
-        f"Translation: *{new_verb['ru']}*",
-        reply_markup=speed_kb()
-    )
+        return random.choice(available)
 # ============================
 #  CALLBACK HANDLER
 # ============================
