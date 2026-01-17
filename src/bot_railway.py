@@ -473,33 +473,36 @@ async def cb(q: types.CallbackQuery):
     # SETTINGS
     # ============================
     if data == "menu_settings":
-    # гарантируем, что настройки существуют и содержат ВСЕ ключи
-       user_settings.setdefault(uid, {"daily_enabled": False, "level": 1})
+        # гарантируем, что настройки существуют и содержат ВСЕ ключи
+        user_settings.setdefault(uid, {"daily_enabled": False, "level": 1})
 
-       lvl = user_settings[uid]["level"]
-       daily = user_settings[uid]["daily_enabled"]
+        lvl = user_settings[uid]["level"]
+        daily = user_settings[uid]["daily_enabled"]
 
-       kb = InlineKeyboardMarkup(inline_keyboard=[
-           [InlineKeyboardButton(text="🎚 Difficulty", callback_data="menu_difficulty")],
-           [InlineKeyboardButton(text="🔔 Daily reminder", callback_data="toggle_daily")],
-           [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎚 Difficulty", callback_data="menu_difficulty")],
+            [InlineKeyboardButton(text="🔔 Daily reminder", callback_data="toggle_daily")],
+            [InlineKeyboardButton(text="⬅️ Back", callback_data="back")]
         ])
 
-    await q.message.edit_text(
-        f"⚙️ Settings\n\n"
-        f"Difficulty level: {lvl}\n"
-        f"Daily: {'ON' if daily else 'OFF'}",
-        reply_markup=kb
-    )
-    return
+        await q.message.edit_text(
+            f"⚙️ Settings\n\n"
+            f"Difficulty level: {lvl}\n"
+            f"Daily: {'ON' if daily else 'OFF'}",
+            reply_markup=kb
+        )
+        return
+
 
     if data == "toggle_daily":
-        user_settings.setdefault(uid, {"daily_enabled": False})
+        # тоже гарантируем, что структура настроек полная
+        user_settings.setdefault(uid, {"daily_enabled": False, "level": 1})
+
         user_settings[uid]["daily_enabled"] = not user_settings[uid]["daily_enabled"]
 
         await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
         return
-
+    
     # ============================
     # DIFFICULTY
     # ============================
