@@ -154,6 +154,7 @@ def difficulty_kb():
 # ============================
 
 async def start_forms(uid, cid):
+    print("DEBUG:", verb["inf"], "LEVEL:", verb["level"])
     init_user(uid)
     verb = get_random_verb(get_user_level(uid))
     user_state[uid] = {"mode": "forms", "verb": verb}
@@ -389,7 +390,7 @@ async def process_speed(uid, text, msg):
 
     # NEW VERB (LEVEL-BASED)
     st["verb"] = get_random_verb(get_user_level(uid))
-    
+
 # ============================
 #  CALLBACK HANDLER
 # ============================
