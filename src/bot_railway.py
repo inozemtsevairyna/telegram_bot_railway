@@ -84,15 +84,13 @@ def get_user_level(uid):
     return user_settings[uid]["level"]
 
 def get_random_verb(level):
-    if level == 1:
-        return random.choice(verbs[:50])
-    elif level == 2:
-        return random.choice(verbs[:150])
-    return random.choice(verbs)
+    available = [v for v in verbs if v.get("level", 1) <= level]
+    return random.choice(available)
 
 def add_error(uid, error):
     if not any(e["verb"]["inf"] == error["verb"]["inf"] and e["mode"] == error["mode"] for e in user_errors[uid]):
         user_errors[uid].append(error)
+
 # ============================
 #  KEYBOARDS
 # ============================
@@ -234,6 +232,10 @@ def norm(text):
     return [p.strip().lower() for p in text.replace(",", " ").split() if p.strip()]
 
 
+# ============================
+#  TRANSLATION PROCESSING
+# ============================
+
 async def process_translation(uid, text, msg, mode=None):
     init_user(uid)
     st = user_state.get(uid, {})
@@ -243,7 +245,6 @@ async def process_translation(uid, text, msg, mode=None):
         return
 
     verb = st["verb"]
-
     expected = [p.strip() for p in verb["ru"].lower().replace(",", "/").split("/")]
 
     ok = any(text.lower() == e or text.lower() in e for e in expected)
@@ -256,11 +257,15 @@ async def process_translation(uid, text, msg, mode=None):
         add_error(uid, {"verb": verb, "mode": "translation"})
         reply = f"❌ Wrong!\n\nCorrect: *{verb['inf']}* — *{verb['ru']}*"
 
-    # MIX MODE
+    # send reply
     if st["mode"] == "mix":
         await msg.answer(reply, reply_markup=translation_kb("mix"))
     else:
         await msg.answer(reply, reply_markup=translation_kb("translation"))
+
+    # NEW VERB (LEVEL-BASED)
+    st["verb"] = get_random_verb(get_user_level(uid))
+
 
 
 # ============================
@@ -284,7 +289,6 @@ async def process_forms(uid, text, msg, mode=None):
         return
 
     verb = st["verb"]
-
     ans = norm(text)
 
     past_forms = normalize_forms(verb["past"])
@@ -295,6 +299,7 @@ async def process_forms(uid, text, msg, mode=None):
         ans[0] in past_forms and
         " ".join(ans[1:]) in part_forms
     )
+
     if ok:
         user_stats[uid]["correct"] += 1
         reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
@@ -303,11 +308,15 @@ async def process_forms(uid, text, msg, mode=None):
         add_error(uid, {"verb": verb, "mode": "forms"})
         reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
 
-    # MIX MODE
+    # send reply
     if st["mode"] == "mix":
         await msg.answer(reply, reply_markup=forms_kb("mix"))
     else:
         await msg.answer(reply, reply_markup=forms_kb("forms"))
+
+    # NEW VERB (LEVEL-BASED)
+    st["verb"] = get_random_verb(get_user_level(uid))
+
 
 
 # ============================
@@ -378,16 +387,9 @@ async def process_speed(uid, text, msg):
 
     await msg.answer(reply)
 
-    # NEW QUESTION
-    def get_random_verb(level):
-        # выбираем только те глаголы, чей уровень <= уровня пользователя
-        available = [v for v in verbs if v.get("level", 1) <= level]
-
-        # если вдруг список пуст (например, уровень 1, а все глаголы имеют level 2+)
-        if not available:
-            available = verbs  # fallback, чтобы бот не упал
-
-        return random.choice(available)
+    # NEW VERB (LEVEL-BASED)
+    st["verb"] = get_random_verb(get_user_level(uid))
+    
 # ============================
 #  CALLBACK HANDLER
 # ============================
@@ -466,13 +468,17 @@ async def cb(q: types.CallbackQuery):
         return
 
     # ============================
-    # SETTINGS
+    #  SETTINGS
     # ============================
-    if data == "menu_settings":
-        # гарантируем, что настройки существуют и содержат ВСЕ ключи
+
+    def ensure_user_settings(uid):
         user_settings.setdefault(uid, {})
         user_settings[uid].setdefault("daily_enabled", False)
         user_settings[uid].setdefault("level", 1)
+
+
+    if data == "menu_settings":
+        ensure_user_settings(uid)
 
         lvl = user_settings[uid]["level"]
         daily = user_settings[uid]["daily_enabled"]
@@ -493,14 +499,55 @@ async def cb(q: types.CallbackQuery):
 
 
     if data == "toggle_daily":
-        # тоже гарантируем, что структура настроек полная
-        user_settings.setdefault(uid, {})
-        user_settings[uid].setdefault("daily_enabled", False)
-        user_settings[uid].setdefault("level", 1)
+        ensure_user_settings(uid)
 
         user_settings[uid]["daily_enabled"] = not user_settings[uid]["daily_enabled"]
 
         await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
+        return
+
+
+    if data == "menu_difficulty":
+        ensure_user_settings(uid)
+
+        lvl = user_settings[uid]["level"]
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=("✅ Level 1" if lvl == 1 else "Level 1"), callback_data="set_level_1")],
+            [InlineKeyboardButton(text=("✅ Level 2" if lvl == 2 else "Level 2"), callback_data="set_level_2")],
+            [InlineKeyboardButton(text=("✅ Level 3" if lvl == 3 else "Level 3"), callback_data="set_level_3")],
+            [InlineKeyboardButton(text="⬅️ Back", callback_data="menu_settings")]
+        ])
+
+        await q.message.edit_text(
+            f"🎚 Difficulty\n\n"
+            f"Current level: {lvl}",
+            reply_markup=kb
+        )
+        return
+
+
+    if data == "set_level_1":
+        ensure_user_settings(uid)
+        user_settings[uid]["level"] = 1
+
+        await q.message.edit_text("Level set to 1️⃣", reply_markup=main_menu(uid))
+        return
+
+
+    if data == "set_level_2":
+        ensure_user_settings(uid)
+        user_settings[uid]["level"] = 2
+
+        await q.message.edit_text("Level set to 2️⃣", reply_markup=main_menu(uid))
+        return
+
+
+    if data == "set_level_3":
+        ensure_user_settings(uid)
+        user_settings[uid]["level"] = 3
+
+        await q.message.edit_text("Level set to 3️⃣", reply_markup=main_menu(uid))
         return
     
     # ============================
