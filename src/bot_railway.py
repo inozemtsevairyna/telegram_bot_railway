@@ -290,15 +290,17 @@ async def process_translation(uid, text, msg, mode=None):
 # ============================
 
 def normalize_forms(value):
+    # Convert correct forms into a list of lowercase strings
     if isinstance(value, list):
         return [v.lower().strip() for v in value]
     if isinstance(value, str):
+        # Split variants like "burned/burnt"
         return [v.lower().strip() for v in value.split("/")]
     return []
 
 
 async def process_forms(uid, text, msg, mode=None):
-    init_user(uid)
+    ensure_user_settings(uid)
     st = user_state.get(uid, {})
 
     if "verb" not in st:
@@ -306,15 +308,28 @@ async def process_forms(uid, text, msg, mode=None):
         return
 
     verb = st["verb"]
-    ans = norm(text)
+    ans = norm(text)  # user input split into words
 
+    # Normalize correct forms
     past_forms = normalize_forms(verb["past"])
     part_forms = normalize_forms(verb["part"])
 
+    # Normalize user input
+    # Example: "was were been" → ["was", "were", "been"]
+    user_past = []
+    user_part = ""
+
+    if len(ans) >= 2:
+        # First part = past forms
+        user_past = [x.strip().lower() for x in ans[0].replace(",", " ").split()]
+        # Second part = participle
+        user_part = " ".join(ans[1:]).strip().lower()
+
+    # Check correctness
     ok = (
-        len(ans) >= 2 and
-        ans[0] in past_forms and
-        " ".join(ans[1:]) in part_forms
+        len(user_past) > 0
+        and set(user_past) == set(past_forms)
+        and user_part in part_forms
     )
 
     if ok:
@@ -325,16 +340,14 @@ async def process_forms(uid, text, msg, mode=None):
         add_error(uid, {"verb": verb, "mode": "forms"})
         reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
 
-    # send reply
+    # Send reply
     if st["mode"] == "mix":
         await msg.answer(reply, reply_markup=forms_kb("mix"))
     else:
         await msg.answer(reply, reply_markup=forms_kb("forms"))
 
-    # NEW VERB (LEVEL-BASED)
+    # New verb (level-based)
     st["verb"] = get_random_verb(get_user_level(uid))
-
-
 
 # ============================
 #  SPEED MODE
