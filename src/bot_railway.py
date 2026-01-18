@@ -94,6 +94,24 @@ def get_random_verb(level):
     print("DEBUG VERB SELECTED:", verb["inf"], "LEVEL:", verb["level"])
     return verb
 
+def build_verb_pool(level):
+    pool = [v for v in verbs if v.get("level", 1) <= level]
+    random.shuffle(pool)
+    return pool
+
+def get_next_verb(uid):
+    st = user_state[uid]
+
+    # If pool is empty or index out of range — rebuild
+    if "pool" not in st or "index" not in st or st["index"] >= len(st["pool"]):
+        level = get_user_level(uid)
+        st["pool"] = build_verb_pool(level)
+        st["index"] = 0
+
+    verb = st["pool"][st["index"]]
+    st["index"] += 1
+    return verb
+
 def add_error(uid, error):
     if not any(e["verb"]["inf"] == error["verb"]["inf"] and e["mode"] == error["mode"] for e in user_errors[uid]):
         user_errors[uid].append(error)
@@ -163,10 +181,16 @@ def difficulty_kb():
 async def start_forms(uid, cid):
     ensure_user_settings(uid)
 
-    verb = get_random_verb(get_user_level(uid))
+    user_state[uid] = {
+        "mode": "forms",
+        "pool": build_verb_pool(get_user_level(uid)),
+        "index": 0
+    }
+
+    verb = get_next_verb(uid)
     print("DEBUG FORMS:", verb["inf"], "LEVEL:", verb["level"])
 
-    user_state[uid] = {"mode": "forms", "verb": verb}
+    user_state[uid]["verb"] = verb
 
     await bot.send_message(
         cid,
@@ -182,10 +206,16 @@ async def start_forms(uid, cid):
 async def start_translation(uid, cid):
     ensure_user_settings(uid)
 
-    verb = get_random_verb(get_user_level(uid))
+    user_state[uid] = {
+        "mode": "translation",
+        "pool": build_verb_pool(get_user_level(uid)),
+        "index": 0
+    }
+
+    verb = get_next_verb(uid)
     print("DEBUG TRANSLATION:", verb["inf"], "LEVEL:", verb["level"])
 
-    user_state[uid] = {"mode": "translation", "verb": verb}
+    user_state[uid]["verb"] = verb
 
     await bot.send_message(
         cid,
@@ -193,15 +223,21 @@ async def start_translation(uid, cid):
         reply_markup=translation_kb("translation")
     )
 
-
 async def start_mix(uid, cid):
     ensure_user_settings(uid)
 
+    user_state[uid] = {
+        "mode": "mix",
+        "pool": build_verb_pool(get_user_level(uid)),
+        "index": 0
+    }
+
     sub = random.choice(["forms", "translation"])
-    verb = get_random_verb(get_user_level(uid))
+    verb = get_next_verb(uid)
     print("DEBUG MIX:", verb["inf"], "LEVEL:", verb["level"], "SUB:", sub)
 
-    user_state[uid] = {"mode": "mix", "sub": sub, "verb": verb}
+    user_state[uid]["verb"] = verb
+    user_state[uid]["sub"] = sub
 
     if sub == "forms":
         await bot.send_message(
@@ -224,17 +260,20 @@ async def start_mix(uid, cid):
 async def start_speed(uid, cid):
     ensure_user_settings(uid)
 
-    verb = get_random_verb(get_user_level(uid))
-    print("DEBUG SPEED:", verb["inf"], "LEVEL:", verb["level"])
-
     user_state[uid] = {
         "mode": "speed",
-        "verb": verb,
+        "pool": build_verb_pool(get_user_level(uid)),
+        "index": 0,
         "correct": 0,
         "total": 0,
         "end": time.time() + 60,
         "wrong": []
     }
+
+    verb = get_next_verb(uid)
+    print("DEBUG SPEED:", verb["inf"], "LEVEL:", verb["level"])
+
+    user_state[uid]["verb"] = verb
 
     await bot.send_message(
         cid,
@@ -281,7 +320,7 @@ async def process_translation(uid, text, msg, mode=None):
         await msg.answer(reply, reply_markup=translation_kb("translation"))
 
     # NEW VERB (LEVEL-BASED)
-    st["verb"] = get_random_verb(get_user_level(uid))
+    st["verb"] = get_next_verb(uid)
 
 
 
@@ -347,7 +386,7 @@ async def process_forms(uid, text, msg, mode=None):
         await msg.answer(reply, reply_markup=forms_kb("forms"))
 
     # New verb (level-based)
-    st["verb"] = get_random_verb(get_user_level(uid))
+    st["verb"] = get_next_verb(uid)
 
 # ============================
 #  SPEED MODE
@@ -418,7 +457,7 @@ async def process_speed(uid, text, msg):
     await msg.answer(reply)
 
     # NEW VERB (LEVEL-BASED)
-    st["verb"] = get_random_verb(get_user_level(uid))
+    st["verb"] = get_next_verb(uid)
 
 # ============================
 #  CALLBACK HANDLER
