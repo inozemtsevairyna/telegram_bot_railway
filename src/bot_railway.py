@@ -354,8 +354,8 @@ async def process_forms(uid, text, msg, mode=None):
     verb = st["verb"]
 
     # Правильные формы
-    past_forms = normalize_forms(verb["past"])
-    part_forms = normalize_forms(verb["part"])
+    past_forms = normalize_forms(verb["past"])     # ["was", "were"]
+    part_forms = normalize_forms(verb["part"])     # ["been"]
 
     # Для красивого вывода
     correct_past = ", ".join(past_forms)
@@ -371,11 +371,17 @@ async def process_forms(uid, text, msg, mode=None):
     else:
         raw = user_input.split()
 
-        if len(raw) == 2:
+        # === НОВОЕ: поддержка 3 форм ===
+        if len(raw) == 3:
+            # Пример: "was were been"
+            # past = ["was", "were"], part = "been"
+            parts = [" ".join(raw[:-1]), raw[-1]]
+
+        elif len(raw) == 2:
             parts = raw
 
-        elif len(raw) > 2:
-            # multi-word форма без запятой
+        elif len(raw) > 3:
+            # multi-word V3: "was been able to" — маловероятно, но поддержим
             parts = [raw[0], " ".join(raw[1:])]
 
         else:
@@ -385,9 +391,17 @@ async def process_forms(uid, text, msg, mode=None):
     if len(parts) != 2:
         ok = False
     else:
-        user_past = parts[0]
+        user_past_raw = parts[0]
         user_part = parts[1]
-        ok = (user_past in past_forms and user_part in part_forms)
+
+        # past может содержать несколько слов → разбиваем
+        user_past_list = user_past_raw.split()
+
+        # Все past должны быть допустимыми
+        ok_past = all(p in past_forms for p in user_past_list)
+        ok_part = user_part in part_forms
+
+        ok = ok_past and ok_part
 
     # Ответ
     if ok:
