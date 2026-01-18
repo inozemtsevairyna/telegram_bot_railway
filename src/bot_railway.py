@@ -95,6 +95,7 @@ def get_random_verb(level):
     return verb
 
 def build_verb_pool(level):
+    # Берём все глаголы уровней ≤ текущего
     pool = [v for v in verbs if v.get("level", 1) <= level]
     random.shuffle(pool)
     return pool
@@ -102,7 +103,7 @@ def build_verb_pool(level):
 def get_next_verb(uid):
     st = user_state[uid]
 
-    # If pool is empty or index out of range — rebuild
+    # Если пула нет или он закончился — пересобираем
     if "pool" not in st or "index" not in st or st["index"] >= len(st["pool"]):
         level = get_user_level(uid)
         st["pool"] = build_verb_pool(level)
@@ -347,27 +348,26 @@ async def process_forms(uid, text, msg, mode=None):
         return
 
     verb = st["verb"]
-    ans = norm(text)  # user input split into words
+    ans = norm(text)  # ["was", "were", "been"]
 
     # Normalize correct forms
-    past_forms = normalize_forms(verb["past"])
-    part_forms = normalize_forms(verb["part"])
+    past_forms = normalize_forms(verb["past"])   # e.g. ["smelled", "smelt"]
+    part_forms = normalize_forms(verb["part"])   # e.g. ["smelled", "smelt"]
 
     # Normalize user input
-    # Example: "was were been" → ["was", "were", "been"]
     user_past = []
     user_part = ""
 
     if len(ans) >= 2:
-        # First part = past forms
-        user_past = [x.strip().lower() for x in ans[0].replace(",", " ").split()]
-        # Second part = participle
-        user_part = " ".join(ans[1:]).strip().lower()
+        user_past = ans[:-1]      # все кроме последнего
+        user_part = ans[-1]       # последнее слово
 
-    # Check correctness
+    # Correctness check:
+    # 1) past: все введённые формы должны быть допустимыми
+    # 2) participle: должен быть одним из вариантов
     ok = (
         len(user_past) > 0
-        and set(user_past) == set(past_forms)
+        and all(p in past_forms for p in user_past)
         and user_part in part_forms
     )
 
@@ -476,7 +476,10 @@ async def cb(q: types.CallbackQuery):
     # ============================
     if data == "back":
         user_state[uid] = {}
-        await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
+        try:
+            await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
+        except:
+            await bot.send_message(uid, "Choose a mode 👇", reply_markup=main_menu(uid))
         return
 
     # ============================
