@@ -74,8 +74,12 @@ user_stats = {}
 user_settings = {}
 user_errors = {}
 
+def ensure_user_settings(uid):
+    if uid not in user_settings:
+        user_settings[uid] = {"daily_enabled": False, "level": 1}
+
 def init_user(uid):
-    user_settings.setdefault(uid, {"daily_enabled": False, "level": 1})
+    ensure_user_settings(uid)
     user_stats.setdefault(uid, {"correct": 0, "wrong": 0, "best": 0, "streak": 0, "last_training": 0})
     user_errors.setdefault(uid, [])
     user_state.setdefault(uid, {})
@@ -157,9 +161,11 @@ def difficulty_kb():
 # ============================
 
 async def start_forms(uid, cid):
-    print("DEBUG:", verb["inf"], "LEVEL:", verb["level"])
-    init_user(uid)
+    ensure_user_settings(uid)
+
     verb = get_random_verb(get_user_level(uid))
+    print("DEBUG FORMS:", verb["inf"], "LEVEL:", verb["level"])
+
     user_state[uid] = {"mode": "forms", "verb": verb}
 
     await bot.send_message(
@@ -174,8 +180,11 @@ async def start_forms(uid, cid):
 
 
 async def start_translation(uid, cid):
-    init_user(uid)
+    ensure_user_settings(uid)
+
     verb = get_random_verb(get_user_level(uid))
+    print("DEBUG TRANSLATION:", verb["inf"], "LEVEL:", verb["level"])
+
     user_state[uid] = {"mode": "translation", "verb": verb}
 
     await bot.send_message(
@@ -186,15 +195,17 @@ async def start_translation(uid, cid):
 
 
 async def start_mix(uid, cid):
-    init_user(uid)
+    ensure_user_settings(uid)
+
     sub = random.choice(["forms", "translation"])
     verb = get_random_verb(get_user_level(uid))
+    print("DEBUG MIX:", verb["inf"], "LEVEL:", verb["level"], "SUB:", sub)
 
     user_state[uid] = {"mode": "mix", "sub": sub, "verb": verb}
 
     if sub == "forms":
-       await bot.send_message(
-           cid,
+        await bot.send_message(
+            cid,
             f"🎲 *Mix — Forms*\n\n"
             f"Infinitive: *{verb['inf']}*\n"
             f"Translation: *{verb['ru']}*\n\n"
@@ -211,8 +222,10 @@ async def start_mix(uid, cid):
 
 
 async def start_speed(uid, cid):
-    init_user(uid)
+    ensure_user_settings(uid)
+
     verb = get_random_verb(get_user_level(uid))
+    print("DEBUG SPEED:", verb["inf"], "LEVEL:", verb["level"])
 
     user_state[uid] = {
         "mode": "speed",
