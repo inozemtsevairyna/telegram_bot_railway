@@ -330,12 +330,16 @@ async def process_translation(uid, text, msg, mode=None):
 # ============================
 
 def normalize_forms(value):
-    # Convert correct forms into a list of lowercase strings
+    # Если список — нормализуем каждый элемент
     if isinstance(value, list):
         return [v.lower().strip() for v in value]
+
+    # Если строка — поддерживаем варианты через "/"
     if isinstance(value, str):
-        # Split variants like "burned/burnt"
-        return [v.lower().strip() for v in value.split("/")]
+        # НЕ разбиваем по пробелам — multi-word формы должны быть целыми
+        variants = value.split("/")
+        return [v.lower().strip() for v in variants]
+
     return []
 
 
@@ -348,29 +352,44 @@ async def process_forms(uid, text, msg, mode=None):
         return
 
     verb = st["verb"]
-    ans = norm(text)  # ["was", "were", "been"]
 
-    # Normalize correct forms
-    past_forms = normalize_forms(verb["past"])   # e.g. ["smelled", "smelt"]
-    part_forms = normalize_forms(verb["part"])   # e.g. ["smelled", "smelt"]
+    # Правильные формы (поддержка multi-word и вариантов через "/")
+    past_forms = normalize_forms(verb["past"])     # ["smelled", "smelt"]
+    part_forms = normalize_forms(verb["part"])     # ["smelled", "smelt"] или ["been able to"]
 
-    # Normalize user input
-    user_past = []
-    user_part = ""
+    # Полный ввод пользователя
+    user_input = text.lower().strip()
 
-    if len(ans) >= 2:
-        user_past = ans[:-1]      # все кроме последнего
-        user_part = ans[-1]       # последнее слово
+    # 1) Если ученик использует запятую: "went, gone"
+    if "," in user_input:
+        parts = [p.strip() for p in user_input.split(",")]
 
-    # Correctness check:
-    # 1) past: все введённые формы должны быть допустимыми
-    # 2) participle: должен быть одним из вариантов
-    ok = (
-        len(user_past) > 0
-        and all(p in past_forms for p in user_past)
-        and user_part in part_forms
-    )
+    else:
+        # 2) Если нет запятой — пробуем разделить по пробелам
+        raw = user_input.split()
 
+        if len(raw) == 2:
+            # обычный случай: "went gone"
+            parts = raw
+
+        elif len(raw) > 2:
+            # multi-word форма без запятой:
+            # "could been able to"
+            parts = [raw[0], " ".join(raw[1:])]
+
+        else:
+            # слишком мало слов
+            parts = []
+
+    # Проверяем, что ровно две формы
+    if len(parts) != 2:
+        ok = False
+    else:
+        user_past = parts[0]
+        user_part = parts[1]
+        ok = (user_past in past_forms and user_part in part_forms)
+
+    # Ответ пользователю
     if ok:
         user_stats[uid]["correct"] += 1
         reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
@@ -379,13 +398,13 @@ async def process_forms(uid, text, msg, mode=None):
         add_error(uid, {"verb": verb, "mode": "forms"})
         reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
 
-    # Send reply
+    # Отправляем ответ
     if st["mode"] == "mix":
         await msg.answer(reply, reply_markup=forms_kb("mix"))
     else:
         await msg.answer(reply, reply_markup=forms_kb("forms"))
 
-    # New verb (level-based)
+    # Следующий глагол
     st["verb"] = get_next_verb(uid)
 
 # ============================
@@ -466,6 +485,7 @@ async def process_speed(uid, text, msg):
 @dp.callback_query()
 async def cb(q: types.CallbackQuery):
     await q.answer()   # подтверждаем callback сразу
+
     uid = q.from_user.id
     cid = q.message.chat.id
     data = q.data
@@ -542,13 +562,6 @@ async def cb(q: types.CallbackQuery):
     # ============================
     #  SETTINGS
     # ============================
-
-    def ensure_user_settings(uid):
-        user_settings.setdefault(uid, {})
-        user_settings[uid].setdefault("daily_enabled", False)
-        user_settings[uid].setdefault("level", 1)
-
-
     if data == "menu_settings":
         ensure_user_settings(uid)
 
@@ -569,7 +582,6 @@ async def cb(q: types.CallbackQuery):
         )
         return
 
-
     if data == "toggle_daily":
         ensure_user_settings(uid)
 
@@ -577,7 +589,6 @@ async def cb(q: types.CallbackQuery):
 
         await q.message.edit_text("Choose a mode 👇", reply_markup=main_menu(uid))
         return
-
 
     if data == "menu_difficulty":
         ensure_user_settings(uid)
@@ -598,14 +609,12 @@ async def cb(q: types.CallbackQuery):
         )
         return
 
-
     if data == "set_level_1":
         ensure_user_settings(uid)
         user_settings[uid]["level"] = 1
 
         await q.message.edit_text("Level set to 1️⃣", reply_markup=main_menu(uid))
         return
-
 
     if data == "set_level_2":
         ensure_user_settings(uid)
@@ -614,50 +623,76 @@ async def cb(q: types.CallbackQuery):
         await q.message.edit_text("Level set to 2️⃣", reply_markup=main_menu(uid))
         return
 
-
     if data == "set_level_3":
         ensure_user_settings(uid)
         user_settings[uid]["level"] = 3
 
         await q.message.edit_text("Level set to 3️⃣", reply_markup=main_menu(uid))
         return
-    
-    # ============================
-    # DIFFICULTY
-    # ============================
-    if data == "menu_difficulty":
-        await q.message.edit_text(
-            "Choose difficulty level:",
-            reply_markup=difficulty_kb()
-        )
-        return
-
-    if data.startswith("difficulty_"):
-        level = int(data.split("_")[1])
-        user_settings[uid]["level"] = level
-
-        await q.message.edit_text(
-            f"Difficulty level set to {level}.",
-            reply_markup=main_menu(uid)
-        )
-        return
 
     # ============================
     # NEXT BUTTONS
     # ============================
     if data.endswith("_next"):
-        mode = data.split("_")[0]
+        st = user_state[uid]
 
+        # следующий глагол
+        st["verb"] = get_next_verb(uid)
+        verb = st["verb"]
+        mode = st["mode"]
+
+        # FORMS
         if mode == "forms":
-            await start_forms(uid, cid)
-        elif mode == "translation":
-            await start_translation(uid, cid)
-        elif mode == "mix":
-            await start_mix(uid, cid)
-        elif mode == "repeat":
-            await start_mix(uid, cid)
+            await q.message.edit_text(
+                f"📘 *Verb Forms*\n\n"
+                f"Infinitive: *{verb['inf']}*\n"
+                f"Translation: *{verb['ru']}*\n\n"
+                f"Write the 2nd and 3rd forms.\n"
+                f"Example: go → went, gone",
+                reply_markup=forms_kb("forms")
+            )
+            return
 
-        return
+        # TRANSLATION
+        if mode == "translation":
+            await q.message.edit_text(
+                f"🌐 *Translation*\n\nTranslate:\n*{verb['inf']}*",
+                reply_markup=translation_kb("translation")
+            )
+            return
+
+        # MIX
+        if mode == "mix":
+            sub = st.get("sub")
+            if sub == "forms":
+                await q.message.edit_text(
+                    f"🎲 *Mix — Forms*\n\n"
+                    f"Infinitive: *{verb['inf']}*\n"
+                    f"Translation: *{verb['ru']}*\n\n"
+                    f"Write the 2nd and 3rd forms.",
+                    reply_markup=forms_kb("mix")
+                )
+            else:
+                await q.message.edit_text(
+                    f"🎲 *Mix — Translation*\n\nTranslate:\n*{verb['inf']}*",
+                    reply_markup=translation_kb("mix")
+                )
+            return
+
+        # REPEAT
+        if mode == "repeat":
+            repeat_mode = st.get("repeat_mode")
+            if repeat_mode == "forms":
+                await q.message.edit_text(
+                    f"🔁 Repeat — Forms\n\n{verb['inf']} — {verb['ru']}",
+                    reply_markup=forms_kb("repeat")
+                )
+            else:
+                await q.message.edit_text(
+                    f"🔁 Repeat — Translation\n\n*{verb['inf']}*",
+                    reply_markup=translation_kb("repeat")
+                )
+            return
 
     # ============================
     # SPEED STOP
@@ -670,7 +705,7 @@ async def cb(q: types.CallbackQuery):
         )
         user_state[uid] = {}
         return
-
+    
 # ============================
 #  COMMANDS
 # ============================
@@ -679,7 +714,17 @@ async def cb(q: types.CallbackQuery):
 async def cmd_start(msg: types.Message):
     uid = msg.from_user.id
     init_user(uid)
-    await msg.answer("👋 Welcome! Choose a mode 👇", reply_markup=main_menu(uid))
+    await msg.answer(
+        "👋 Welcome!\n\n"
+        "I will help you practise irregular verbs.\n\n"
+        "Choose a mode:\n"
+        "📘 Verb Forms — write V2 + V3\n"
+        "🌐 Translation — translate the verb\n"
+        "🎲 Mix — random tasks\n"
+        "⚡ Speed — 60 seconds challenge\n"
+        "🔁 Repeat — practise your mistakes\n",
+        reply_markup=main_menu(uid)
+    )
 
 
 @dp.message(Command("help"))
@@ -721,21 +766,35 @@ async def text_handler(msg: types.Message):
     mode = st["mode"]
     text = msg.text.strip()
 
+    # FORMS
     if mode == "forms":
         await process_forms(uid, text, msg)
         return
 
+    # TRANSLATION
     if mode == "translation":
         await process_translation(uid, text, msg)
         return
 
+    # MIX
     if mode == "mix":
-        if st["sub"] == "forms":
+        sub = st.get("sub")
+        if sub == "forms":
             await process_forms(uid, text, msg)
         else:
             await process_translation(uid, text, msg)
         return
 
+    # REPEAT
+    if mode == "repeat":
+        repeat_mode = st.get("repeat_mode")
+        if repeat_mode == "forms":
+            await process_forms(uid, text, msg)
+        else:
+            await process_translation(uid, text, msg)
+        return
+
+    # SPEED
     if mode == "speed":
         await process_speed(uid, text, msg)
         return
@@ -752,10 +811,26 @@ async def on_startup(app):
     await bot.set_webhook(WEBHOOK_URL)
     print(f"🌐 Webhook set: {WEBHOOK_URL}")
 
+    # Запускаем ежедневное напоминание
+    asyncio.create_task(daily_task())
 
 async def on_shutdown(app):
     await bot.session.close()
 
+import asyncio
+from datetime import datetime
+
+async def daily_task():
+    while True:
+        now = datetime.now().strftime("%H:%M")
+        if now == "09:00":   # время напоминания
+            for uid, settings in user_settings.items():
+                if settings.get("daily_enabled"):
+                    try:
+                        await bot.send_message(uid, "⏰ Time to practise your verbs!")
+                    except:
+                        pass
+        await asyncio.sleep(60)
 
 # Создаём aiohttp приложение
 app = web.Application()
