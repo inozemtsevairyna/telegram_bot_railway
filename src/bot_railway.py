@@ -353,35 +353,35 @@ async def process_forms(uid, text, msg, mode=None):
 
     verb = st["verb"]
 
-    # Правильные формы (поддержка multi-word и вариантов через "/")
-    past_forms = normalize_forms(verb["past"])     # ["smelled", "smelt"]
-    part_forms = normalize_forms(verb["part"])     # ["smelled", "smelt"] или ["been able to"]
+    # Правильные формы
+    past_forms = normalize_forms(verb["past"])
+    part_forms = normalize_forms(verb["part"])
 
-    # Полный ввод пользователя
+    # Для красивого вывода
+    correct_past = ", ".join(past_forms)
+    correct_part = ", ".join(part_forms)
+
+    # Ввод пользователя
     user_input = text.lower().strip()
 
-    # 1) Если ученик использует запятую: "went, gone"
+    # 1) Через запятую
     if "," in user_input:
         parts = [p.strip() for p in user_input.split(",")]
 
     else:
-        # 2) Если нет запятой — пробуем разделить по пробелам
         raw = user_input.split()
 
         if len(raw) == 2:
-            # обычный случай: "went gone"
             parts = raw
 
         elif len(raw) > 2:
-            # multi-word форма без запятой:
-            # "could been able to"
+            # multi-word форма без запятой
             parts = [raw[0], " ".join(raw[1:])]
 
         else:
-            # слишком мало слов
             parts = []
 
-    # Проверяем, что ровно две формы
+    # Проверка
     if len(parts) != 2:
         ok = False
     else:
@@ -389,16 +389,22 @@ async def process_forms(uid, text, msg, mode=None):
         user_part = parts[1]
         ok = (user_past in past_forms and user_part in part_forms)
 
-    # Ответ пользователю
+    # Ответ
     if ok:
         user_stats[uid]["correct"] += 1
-        reply = f"✅ Correct!\n\n{verb['inf']} — {verb['past']}, {verb['part']}"
+        reply = (
+            f"✅ Correct!\n\n"
+            f"{verb['inf']} — {correct_past}, {correct_part}"
+        )
     else:
         user_stats[uid]["wrong"] += 1
         add_error(uid, {"verb": verb, "mode": "forms"})
-        reply = f"❌ Wrong!\n\nCorrect: {verb['inf']} — {verb['past']}, {verb['part']}"
+        reply = (
+            f"❌ Wrong!\n\n"
+            f"Correct: {verb['inf']} — {correct_past}, {correct_part}"
+        )
 
-    # Отправляем ответ
+    # Отправка
     if st["mode"] == "mix":
         await msg.answer(reply, reply_markup=forms_kb("mix"))
     else:
